@@ -88,6 +88,7 @@ export default function AddModal({
   // ── Screenshot state ──
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const screenshotInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // ── Bulk state ──
   const [bulkType, setBulkType] = useState<ItemType>("movie");
@@ -764,8 +765,19 @@ export default function AddModal({
           {step === "screenshot" && (
             <div>
               <StepHeader title="Screenshot" onBack={() => setStep("choose")} />
+
+              {/* Camera button */}
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 py-4 mb-3 rounded-xl border border-vault-warm/30 bg-vault-warm/[0.06] text-vault-warm font-body text-sm hover:bg-vault-warm/[0.1] transition-colors"
+              >
+                <span className="text-lg">📸</span>
+                Take a photo
+              </button>
+
+              {/* File upload drop zone */}
               <div
-                className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-white/[0.08] bg-white/[0.02] cursor-pointer hover:border-vault-warm/30 hover:bg-white/[0.04] transition-all"
+                className="flex flex-col items-center justify-center gap-3 p-6 rounded-xl border-2 border-dashed border-white/[0.08] bg-white/[0.02] cursor-pointer hover:border-white/[0.15] hover:bg-white/[0.04] transition-all"
                 onClick={() => screenshotInputRef.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
@@ -774,12 +786,10 @@ export default function AddModal({
                   if (file) handleScreenshotSelect(file);
                 }}
               >
-                <span className="text-3xl">📷</span>
                 <div className="text-center">
-                  <p className="text-sm font-body text-vault-text">Drop screenshot here</p>
-                  <p className="text-xs text-vault-muted mt-1">or tap to upload</p>
+                  <p className="text-sm font-body text-vault-muted">Upload a screenshot</p>
+                  <p className="text-[10px] text-vault-muted/50 font-body mt-1">JPEG, PNG, WebP · max 5 MB</p>
                 </div>
-                <p className="text-[10px] text-vault-muted/60 font-body">JPEG, PNG, WebP · max 5 MB</p>
               </div>
 
               {screenshotError && (
@@ -790,6 +800,17 @@ export default function AddModal({
                 ref={screenshotInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleScreenshotSelect(file);
+                }}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
