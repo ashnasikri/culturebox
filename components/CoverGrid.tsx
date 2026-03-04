@@ -8,17 +8,21 @@ interface CoverGridProps {
   isLoading?: boolean;
   onCoverUpdate?: (id: string, newUrl: string) => void;
   onQuickQuote?: (item: Item) => void;
+  onItemTap?: (item: Item) => void;
 }
 
-export default function CoverGrid({ items, isLoading, onCoverUpdate, onQuickQuote }: CoverGridProps) {
+export default function CoverGrid({
+  items,
+  isLoading,
+  onCoverUpdate,
+  onQuickQuote,
+  onItemTap,
+}: CoverGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-3 gap-3 px-4 pb-24">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className="aspect-[2/3] rounded-lg animate-shimmer"
-          />
+          <div key={i} className="aspect-[2/3] rounded-lg animate-shimmer" />
         ))}
       </div>
     );
@@ -36,7 +40,13 @@ export default function CoverGrid({ items, isLoading, onCoverUpdate, onQuickQuot
   return (
     <div className="grid grid-cols-3 gap-3 px-4 pb-24">
       {items.map((item) => (
-        <CoverCard key={item.id} item={item} onCoverUpdate={onCoverUpdate} onQuickQuote={onQuickQuote} />
+        <CoverCard
+          key={item.id}
+          item={item}
+          onCoverUpdate={onCoverUpdate}
+          onQuickQuote={onQuickQuote}
+          onItemTap={onItemTap}
+        />
       ))}
     </div>
   );

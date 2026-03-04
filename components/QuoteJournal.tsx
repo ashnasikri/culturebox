@@ -6,9 +6,10 @@ import QuoteCard from "./QuoteCard";
 interface QuoteJournalProps {
   quotes: Quote[];
   isLoading?: boolean;
+  onDeleteQuote?: (id: string) => void;
 }
 
-export default function QuoteJournal({ quotes, isLoading }: QuoteJournalProps) {
+export default function QuoteJournal({ quotes, isLoading, onDeleteQuote }: QuoteJournalProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-4 px-4 pb-24">
@@ -37,7 +38,7 @@ export default function QuoteJournal({ quotes, isLoading }: QuoteJournalProps) {
   return (
     <div className="flex flex-col gap-3 px-4 pb-24">
       {quotes.map((quote) => (
-        <QuoteCard key={quote.id} quote={quote} />
+        <QuoteCard key={quote.id} quote={quote} onDeleted={onDeleteQuote} />
       ))}
     </div>
   );

@@ -5,12 +5,15 @@ import { Tab, Item, Quote } from "@/types";
 import TabNav from "@/components/TabNav";
 import FAB from "@/components/FAB";
 import CoverGrid from "@/components/CoverGrid";
+import ListView from "@/components/ListView";
 import QuoteJournal from "@/components/QuoteJournal";
 import AddModal from "@/components/AddModal";
+import ItemDetail from "@/components/ItemDetail";
 import Toast from "@/components/Toast";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("movies");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [modalOpen, setModalOpen] = useState(false);
   const [prefillQuoteItem, setPrefillQuoteItem] = useState<Item | null>(null);
 
@@ -20,10 +23,10 @@ export default function Home() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(true);
 
-  const [toast, setToast] = useState({ message: "", visible: false });
+  const [detailItem, setDetailItem] = useState<Item | null>(null);
 
-  const showToast = (message: string) =>
-    setToast({ message, visible: true });
+  const [toast, setToast] = useState({ message: "", visible: false });
+  const showToast = (message: string) => setToast({ message, visible: true });
 
   const fetchItems = useCallback(async () => {
     try {
@@ -69,9 +72,7 @@ export default function Home() {
 
   const handleCoverUpdate = (id: string, newUrl: string) => {
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, cover_image_url: newUrl } : item
-      )
+      prev.map((item) => (item.id === id ? { ...item, cover_image_url: newUrl } : item))
     );
   };
 
@@ -80,38 +81,79 @@ export default function Home() {
     setModalOpen(true);
   };
 
+  // ItemDetail callbacks
+  const handleItemUpdated = (updated: Item) => {
+    setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+    setDetailItem(null);
+  };
+
+  const handleItemDeleted = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    // Remove linked quotes from local state too (already deleted server-side if cascade)
+    setDetailItem(null);
+    // Refetch quotes to reflect any cascade delete
+    fetchQuotes();
+  };
+
+  const handleQuoteDeleted = (id: string) => {
+    setQuotes((prev) => prev.filter((q) => q.id !== id));
+    showToast("Quote deleted");
+  };
+
   const movieItems = items.filter((i) => i.type === "movie");
   const bookItems = items.filter((i) => i.type === "book");
+
+  const linkedQuotesCount = detailItem
+    ? quotes.filter((q) => q.source_item_id === detailItem.id).length
+    : 0;
+
+  const sharedGridProps = {
+    isLoading: isLoadingItems,
+    onCoverUpdate: handleCoverUpdate,
+    onQuickQuote: handleQuickQuote,
+    onItemTap: setDetailItem,
+  };
 
   return (
     <main className="min-h-screen min-h-dvh max-w-lg mx-auto">
       <header className="px-4 pt-12 pb-2">
-        <h1 className="font-heading text-2xl tracking-tight text-vault-text">
-          Vault
-        </h1>
+        <h1 className="font-heading text-2xl tracking-tight text-vault-text">Vault</h1>
       </header>
 
-      <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
       <section className="mt-2">
-        {activeTab === "movies" && (
-          <CoverGrid
+        {activeTab === "movies" && viewMode === "grid" && (
+          <CoverGrid items={movieItems} {...sharedGridProps} />
+        )}
+        {activeTab === "movies" && viewMode === "list" && (
+          <ListView
             items={movieItems}
             isLoading={isLoadingItems}
-            onCoverUpdate={handleCoverUpdate}
-            onQuickQuote={handleQuickQuote}
+            onItemTap={setDetailItem}
           />
         )}
-        {activeTab === "books" && (
-          <CoverGrid
+        {activeTab === "books" && viewMode === "grid" && (
+          <CoverGrid items={bookItems} {...sharedGridProps} />
+        )}
+        {activeTab === "books" && viewMode === "list" && (
+          <ListView
             items={bookItems}
             isLoading={isLoadingItems}
-            onCoverUpdate={handleCoverUpdate}
-            onQuickQuote={handleQuickQuote}
+            onItemTap={setDetailItem}
           />
         )}
         {activeTab === "quotes" && (
-          <QuoteJournal quotes={quotes} isLoading={isLoadingQuotes} />
+          <QuoteJournal
+            quotes={quotes}
+            isLoading={isLoadingQuotes}
+            onDeleteQuote={handleQuoteDeleted}
+          />
         )}
       </section>
 
@@ -123,6 +165,16 @@ export default function Home() {
         onSaved={handleSaved}
         prefillQuoteItem={prefillQuoteItem}
         vaultItems={items}
+      />
+
+      <ItemDetail
+        item={detailItem}
+        isOpen={detailItem !== null}
+        onClose={() => setDetailItem(null)}
+        onUpdated={handleItemUpdated}
+        onDeleted={handleItemDeleted}
+        linkedQuotesCount={linkedQuotesCount}
+        onShowToast={showToast}
       />
 
       <Toast

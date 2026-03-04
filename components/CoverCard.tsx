@@ -8,9 +8,15 @@ interface CoverCardProps {
   item: Item;
   onCoverUpdate?: (id: string, newUrl: string) => void;
   onQuickQuote?: (item: Item) => void;
+  onItemTap?: (item: Item) => void;
 }
 
-export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCardProps) {
+export default function CoverCard({
+  item,
+  onCoverUpdate,
+  onQuickQuote,
+  onItemTap,
+}: CoverCardProps) {
   const isWantTo = item.status === "want_to";
   const isReading = item.status === "reading";
   const isFinished = item.status === "watched" || item.status === "read";
@@ -26,25 +32,40 @@ export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCa
   const fileInputRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchMoved = useRef(false);
+  const lastTouchEndAt = useRef(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Long-press for mobile
+  // Long-press → cover change (mobile)
   const handleTouchStart = () => {
     touchMoved.current = false;
     longPressTimer.current = setTimeout(() => {
       if (!touchMoved.current) {
         fileInputRef.current?.click();
       }
-    }, 500);
+    }, 600);
   };
 
   const handleTouchEnd = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    lastTouchEndAt.current = Date.now();
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+      if (!touchMoved.current) {
+        // Short tap → open ItemDetail
+        onItemTap?.(item);
+      }
+    }
   };
 
   const handleTouchMove = () => {
     touchMoved.current = true;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  // Desktop click → open ItemDetail (suppress synthetic click after touch)
+  const handleClick = () => {
+    if (Date.now() - lastTouchEndAt.current < 600) return;
+    onItemTap?.(item);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,22 +74,14 @@ export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCa
 
     setIsUploading(true);
     try {
-      // Upload to storage
       const ext = file.type.split("/")[1] || "jpg";
       const formData = new FormData();
       formData.append("file", file);
-      formData.append(
-        "fileName",
-        `${Date.now()}-${item.id}.${ext}`
-      );
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+      formData.append("fileName", `${Date.now()}-${item.id}.${ext}`);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
       const { url } = await uploadRes.json();
       if (!url) throw new Error("Upload failed");
 
-      // Update item in DB
       const patchRes = await fetch(`/api/items/${item.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -81,14 +94,14 @@ export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCa
       console.error("Cover update error:", err);
     } finally {
       setIsUploading(false);
-      // Reset input so same file can be re-selected
       e.target.value = "";
     }
   };
 
   return (
     <div
-      className={`group relative flex flex-col ${isWantTo ? "want-to-item" : ""}`}
+      className={`group relative flex flex-col cursor-pointer ${isWantTo ? "want-to-item" : ""}`}
+      onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
@@ -116,9 +129,8 @@ export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCa
         {/* Action icons — hover (desktop) */}
         {!isUploading && (
           <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-            {/* Change cover */}
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
               className="w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-black/80"
               title="Change cover"
             >
@@ -128,10 +140,9 @@ export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCa
                 <circle cx="12" cy="13" r="4" />
               </svg>
             </button>
-            {/* Quick quote */}
             {onQuickQuote && (
               <button
-                onClick={() => onQuickQuote(item)}
+                onClick={(e) => { e.stopPropagation(); onQuickQuote(item); }}
                 className="w-6 h-6 rounded-md bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-black/80"
                 title="Save a quote"
               >
@@ -153,21 +164,13 @@ export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCa
 
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-2">
-          <p className="text-[11px] font-body text-white leading-tight truncate">
-            {item.title}
-          </p>
+          <p className="text-[11px] font-body text-white leading-tight truncate">{item.title}</p>
           {item.creator && (
-            <p className="text-[10px] text-white/60 truncate mt-0.5">
-              {item.creator}
-            </p>
+            <p className="text-[10px] text-white/60 truncate mt-0.5">{item.creator}</p>
           )}
           <div className="flex items-center justify-between mt-0.5">
-            {item.year && (
-              <span className="text-[10px] text-white/40">{item.year}</span>
-            )}
-            {finishedLabel && (
-              <span className="text-[10px] text-vault-warm">{finishedLabel}</span>
-            )}
+            {item.year && <span className="text-[10px] text-white/40">{item.year}</span>}
+            {finishedLabel && <span className="text-[10px] text-vault-warm">{finishedLabel}</span>}
           </div>
         </div>
 
@@ -179,7 +182,6 @@ export default function CoverCard({ item, onCoverUpdate, onQuickQuote }: CoverCa
         )}
       </div>
 
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"

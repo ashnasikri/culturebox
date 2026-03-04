@@ -21,3 +21,24 @@ export async function PATCH(
 
   return NextResponse.json({ item: data });
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const supabase = createServiceClient();
+  const { searchParams } = new URL(request.url);
+
+  if (searchParams.get("cascade_quotes") === "true") {
+    const { error: qErr } = await supabase
+      .from("quotes")
+      .delete()
+      .eq("source_item_id", params.id);
+    if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 });
+  }
+
+  const { error } = await supabase.from("items").delete().eq("id", params.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ success: true });
+}
