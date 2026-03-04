@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic();
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_SIZE = 5 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
+  // ── API key check ──
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error("[extract] ANTHROPIC_API_KEY is not set");
+    return NextResponse.json(
+      { error: "Server misconfiguration: missing API key" },
+      { status: 500 }
+    );
+  }
+
   const formData = await request.formData();
   const file = formData.get("image") as File | null;
+
+  console.log("[extract] received file:", file?.name, file?.type, file?.size);
 
   if (!file) {
     return NextResponse.json({ error: "No image provided" }, { status: 400 });
@@ -34,8 +44,13 @@ export async function POST(request: NextRequest) {
       | "image/webp"
       | "image/gif";
 
+    console.log("[extract] base64 length:", base64.length, "mediaType:", mediaType);
+
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    console.log("[extract] calling Claude API...");
     const message = await client.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [
         {
@@ -81,6 +96,8 @@ Rules:
     const raw =
       message.content[0].type === "text" ? message.content[0].text : "";
 
+    console.log("[extract] raw Claude response:", raw);
+
     let result;
     try {
       const cleaned = raw
@@ -88,15 +105,17 @@ Rules:
         .replace(/\s*```$/m, "")
         .trim();
       result = JSON.parse(cleaned);
-    } catch {
+    } catch (parseErr) {
+      console.error("[extract] JSON parse failed:", parseErr, "raw:", raw);
       result = { kind: "unknown" };
     }
 
+    console.log("[extract] returning result:", result);
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Extract error:", error);
+    console.error("[extract] Claude API error:", error);
     return NextResponse.json(
-      { error: "Failed to analyse image" },
+      { error: "Failed to analyse image", detail: String(error) },
       { status: 500 }
     );
   }

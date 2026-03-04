@@ -87,6 +87,7 @@ export default function AddModal({
 
   // ── Screenshot state ──
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
+  const [aiIdentified, setAiIdentified] = useState<string | null>(null);
   const screenshotInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -109,7 +110,7 @@ export default function AddModal({
         setQuoteText(""); setSourceQuery(""); setVaultResults([]); setApiResults([]);
         setSelectedSource(null); setCustomTitle(""); setCustomCreator("");
         setShowCustomForm(false); setQuoteType("book");
-        setScreenshotError(null);
+        setScreenshotError(null); setAiIdentified(null);
         setBulkType("movie"); setBulkText(""); setBulkItems([]);
         setIsBulkSearching(false); setBulkProgress({ current: 0, total: 0 });
       }, 300);
@@ -313,11 +314,17 @@ export default function AddModal({
     async (result: ExtractionResponse) => {
       switch (result.kind) {
         case "movie":
-        case "book":
+        case "book": {
+          const label = result.creator
+            ? `${result.title} — ${result.creator}`
+            : result.title;
+          console.log("[screenshot] identified as", result.kind, ":", label);
+          setAiIdentified(label);
           setSearchType(result.kind);
           setQuery(result.title);
           setStep("search");
           break;
+        }
         case "quote":
           setQuoteText(result.text ?? "");
           if (result.source_title) {
@@ -344,6 +351,7 @@ export default function AddModal({
 
   const handleScreenshotSelect = useCallback(
     async (file: File) => {
+      console.log("[screenshot] file selected:", file.name, file.type, `${(file.size / 1024).toFixed(1)} KB`);
       const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
       if (!ALLOWED.includes(file.type)) {
         setScreenshotError("Use JPEG, PNG, WebP, or GIF images.");
@@ -355,15 +363,18 @@ export default function AddModal({
       }
       setScreenshotError(null);
       setStep("screenshot-processing");
+      console.log("[screenshot] posting to /api/extract...");
       try {
         const formData = new FormData();
         formData.append("image", file);
         const res = await fetch("/api/extract", { method: "POST", body: formData });
+        console.log("[screenshot] /api/extract status:", res.status);
         const result = await res.json();
+        console.log("[screenshot] extract result:", result);
         if (result.error) throw new Error(result.error);
         await handleExtractionResult(result);
       } catch (err) {
-        console.error("Screenshot processing error:", err);
+        console.error("[screenshot] error:", err);
         setStep("screenshot-unknown");
       }
     },
@@ -485,7 +496,14 @@ export default function AddModal({
           {/* ── Step: Search ── */}
           {step === "search" && (
             <div>
-              <StepHeader title="Search" onBack={() => setStep("choose")} />
+              <StepHeader title="Search" onBack={() => { setAiIdentified(null); setStep("choose"); }} />
+              {aiIdentified && (
+                <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-vault-warm/[0.08] border border-vault-warm/20">
+                  <span className="text-xs text-vault-warm shrink-0">✦ AI identified</span>
+                  <p className="text-xs font-body text-vault-warm flex-1 truncate">{aiIdentified}</p>
+                  <button onClick={() => setAiIdentified(null)} className="text-vault-warm/40 hover:text-vault-warm text-xs shrink-0">✕</button>
+                </div>
+              )}
               <TypeToggle value={searchType} onChange={setSearchType} />
               <SearchInput
                 ref={searchInputRef}
