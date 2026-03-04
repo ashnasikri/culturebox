@@ -1,11 +1,27 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
-import { SearchResult, ItemType, Item } from "@/types";
+import {
+  SearchResult,
+  ItemType,
+  Item,
+  BulkReviewItem,
+  ExtractionResponse,
+} from "@/types";
 import { generatePlaceholderCover } from "@/lib/placeholder";
 
-type Step = "choose" | "search" | "configure" | "quote";
+type Step =
+  | "choose"
+  | "search"
+  | "configure"
+  | "quote"
+  | "screenshot"
+  | "screenshot-processing"
+  | "screenshot-unknown"
+  | "bulk"
+  | "bulk-review"
+  | "bulk-importing";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -26,6 +42,7 @@ interface AddModalProps {
   onClose: () => void;
   onSaved: () => void;
   prefillQuoteItem?: Item | null;
+  vaultItems?: Item[];
 }
 
 export default function AddModal({
@@ -33,6 +50,7 @@ export default function AddModal({
   onClose,
   onSaved,
   prefillQuoteItem,
+  vaultItems = [],
 }: AddModalProps) {
   // ── Item search state ──
   const [step, setStep] = useState<Step>("choose");
@@ -67,6 +85,18 @@ export default function AddModal({
   const [isSavingQuote, setIsSavingQuote] = useState(false);
   const quoteInputRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── Screenshot state ──
+  const [screenshotError, setScreenshotError] = useState<string | null>(null);
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Bulk state ──
+  const [bulkType, setBulkType] = useState<ItemType>("movie");
+  const [bulkText, setBulkText] = useState("");
+  const [bulkItems, setBulkItems] = useState<BulkReviewItem[]>([]);
+  const [isBulkSearching, setIsBulkSearching] = useState(false);
+  const [bulkFrom, setBulkFrom] = useState<"manual" | "screenshot">("manual");
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+
   // ── Reset on close ──
   useEffect(() => {
     if (!isOpen) {
@@ -78,6 +108,9 @@ export default function AddModal({
         setQuoteText(""); setSourceQuery(""); setVaultResults([]); setApiResults([]);
         setSelectedSource(null); setCustomTitle(""); setCustomCreator("");
         setShowCustomForm(false); setQuoteType("book");
+        setScreenshotError(null);
+        setBulkType("movie"); setBulkText(""); setBulkItems([]);
+        setIsBulkSearching(false); setBulkProgress({ current: 0, total: 0 });
       }, 300);
     }
   }, [isOpen]);
@@ -220,6 +253,173 @@ export default function AddModal({
     }
   };
 
+  // ── Screenshot handlers ──
+  const runBulkSearch = useCallback(
+    async (
+      rawItems: Array<{ title: string; creator?: string; year?: number; type: ItemType }>
+    ) => {
+      setIsBulkSearching(true);
+      setStep("bulk-review");
+
+      const searched = await Promise.all(
+        rawItems.slice(0, 20).map(async (item) => {
+          try {
+            const res = await fetch(
+              `/api/search?q=${encodeURIComponent(item.title)}&type=${item.type}`
+            );
+            const data = await res.json();
+            const first: SearchResult | undefined = data.results?.[0];
+            return {
+              title: first?.title ?? item.title,
+              creator: first?.creator ?? item.creator ?? "",
+              year: first?.year ?? item.year ?? null,
+              coverUrl: first?.coverUrl ?? null,
+              sourceId: first?.sourceId ?? `bulk-${Date.now()}-${Math.random()}`,
+              type: item.type,
+              status: item.type === "movie" ? "watched" : "read",
+              alreadyInVault: false,
+              checked: true,
+            } as BulkReviewItem;
+          } catch {
+            return {
+              title: item.title,
+              creator: item.creator ?? "",
+              year: item.year ?? null,
+              coverUrl: null,
+              sourceId: `bulk-${Date.now()}-${Math.random()}`,
+              type: item.type,
+              status: item.type === "movie" ? "watched" : "read",
+              alreadyInVault: false,
+              checked: true,
+            } as BulkReviewItem;
+          }
+        })
+      );
+
+      const vaultTitlesLower = vaultItems.map((v) => v.title.toLowerCase());
+      const withDuplicates = searched.map((item) => {
+        const inVault = vaultTitlesLower.includes(item.title.toLowerCase());
+        return { ...item, alreadyInVault: inVault, checked: !inVault };
+      });
+
+      setBulkItems(withDuplicates);
+      setIsBulkSearching(false);
+    },
+    [vaultItems]
+  );
+
+  const handleExtractionResult = useCallback(
+    async (result: ExtractionResponse) => {
+      switch (result.kind) {
+        case "movie":
+        case "book":
+          setSearchType(result.kind);
+          setQuery(result.title);
+          setStep("search");
+          break;
+        case "quote":
+          setQuoteText(result.text ?? "");
+          if (result.source_title) {
+            setSelectedSource({
+              item_id: null,
+              title: result.source_title,
+              creator: result.source_creator ?? "",
+              coverUrl: null,
+              type: result.source_type ?? "book",
+            });
+          }
+          setStep("quote");
+          break;
+        case "list":
+          setBulkFrom("screenshot");
+          await runBulkSearch(result.items);
+          break;
+        default:
+          setStep("screenshot-unknown");
+      }
+    },
+    [runBulkSearch]
+  );
+
+  const handleScreenshotSelect = useCallback(
+    async (file: File) => {
+      const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+      if (!ALLOWED.includes(file.type)) {
+        setScreenshotError("Use JPEG, PNG, WebP, or GIF images.");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setScreenshotError("Image must be under 5 MB.");
+        return;
+      }
+      setScreenshotError(null);
+      setStep("screenshot-processing");
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
+        const res = await fetch("/api/extract", { method: "POST", body: formData });
+        const result = await res.json();
+        if (result.error) throw new Error(result.error);
+        await handleExtractionResult(result);
+      } catch (err) {
+        console.error("Screenshot processing error:", err);
+        setStep("screenshot-unknown");
+      }
+    },
+    [handleExtractionResult]
+  );
+
+  const handleBulkSearch = async () => {
+    const lines = bulkText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .slice(0, 20);
+    if (!lines.length) return;
+    setBulkFrom("manual");
+    await runBulkSearch(lines.map((title) => ({ title, type: bulkType })));
+  };
+
+  const handleBulkImport = async () => {
+    const toImport = bulkItems.filter((item) => item.checked && !item.alreadyInVault);
+    if (!toImport.length) return;
+
+    setStep("bulk-importing");
+    setBulkProgress({ current: 0, total: toImport.length });
+
+    for (let i = 0; i < toImport.length; i++) {
+      const item = toImport[i];
+      const isSynthetic = item.sourceId.startsWith("bulk-");
+      try {
+        await fetch("/api/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: item.type,
+            title: item.title,
+            creator: item.creator || null,
+            year: item.year,
+            cover_image_url: item.coverUrl,
+            status: item.status,
+            progress: null,
+            finished_month: null,
+            finished_year: null,
+            imdb_id: item.type === "movie" && !isSynthetic ? item.sourceId : null,
+            openlibrary_id: item.type === "book" && !isSynthetic ? item.sourceId : null,
+          }),
+        });
+      } catch (err) {
+        console.error("Import item error:", err);
+      }
+      setBulkProgress({ current: i + 1, total: toImport.length });
+      if (i < toImport.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    onSaved();
+  };
+
   if (!isOpen) return null;
 
   const showFinished = status === "watched" || status === "read";
@@ -228,7 +428,8 @@ export default function AddModal({
   const hasSourceResults = vaultResults.length > 0 || apiResults.length > 0;
   const canSaveQuote =
     quoteText.trim().length > 0 &&
-    (selectedSource !== null || (customTitle.trim().length > 0));
+    (selectedSource !== null || customTitle.trim().length > 0);
+  const bulkToImportCount = bulkItems.filter((i) => i.checked && !i.alreadyInVault).length;
 
   return (
     <div
@@ -259,16 +460,22 @@ export default function AddModal({
                   onClick={() => setStep("search")}
                 />
                 <ActionButton
+                  emoji="&#128247;"
+                  title="Screenshot"
+                  sub="Extract from an image"
+                  onClick={() => { setScreenshotError(null); setStep("screenshot"); }}
+                />
+                <ActionButton
                   emoji="&#9997;&#65039;"
                   title="Save a quote"
                   sub="Save a line from a book or film"
                   onClick={() => setStep("quote")}
                 />
                 <ActionButton
-                  emoji="&#128247;"
-                  title="Screenshot"
-                  sub="Coming soon"
-                  disabled
+                  emoji="&#128229;"
+                  title="Bulk import"
+                  sub="Paste a list of titles"
+                  onClick={() => setStep("bulk")}
                 />
               </div>
             </div>
@@ -402,7 +609,6 @@ export default function AddModal({
                 }}
               />
 
-              {/* Quote textarea */}
               <textarea
                 ref={quoteInputRef}
                 value={quoteText}
@@ -412,11 +618,9 @@ export default function AddModal({
                 className="w-full px-4 py-3 rounded-xl bg-white/[0.05] border border-white/[0.1] text-[14px] text-white/[0.82] leading-[1.7] focus:outline-none focus:border-vault-warm/40 transition-colors resize-none mb-5 font-quote italic placeholder:not-italic placeholder:font-body placeholder:text-vault-muted"
               />
 
-              {/* Source section */}
               <div>
                 <Label>Source</Label>
 
-                {/* Selected source chip */}
                 {selectedSource ? (
                   <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                     {selectedSource.coverUrl && (
@@ -439,10 +643,7 @@ export default function AddModal({
                   </div>
                 ) : (
                   <>
-                    {/* Type toggle */}
                     <TypeToggle value={quoteType} onChange={setQuoteType} className="mb-3" />
-
-                    {/* Source search */}
                     <SearchInput
                       value={sourceQuery}
                       onChange={setSourceQuery}
@@ -521,7 +722,6 @@ export default function AddModal({
                       </div>
                     )}
 
-                    {/* Manual entry toggle */}
                     {!showCustomForm ? (
                       <button
                         onClick={() => setShowCustomForm(true)}
@@ -557,6 +757,159 @@ export default function AddModal({
                 label={isSavingQuote ? "Saving..." : "Save Quote"}
                 className="mt-6"
               />
+            </div>
+          )}
+
+          {/* ── Step: Screenshot ── */}
+          {step === "screenshot" && (
+            <div>
+              <StepHeader title="Screenshot" onBack={() => setStep("choose")} />
+              <div
+                className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-white/[0.08] bg-white/[0.02] cursor-pointer hover:border-vault-warm/30 hover:bg-white/[0.04] transition-all"
+                onClick={() => screenshotInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files[0];
+                  if (file) handleScreenshotSelect(file);
+                }}
+              >
+                <span className="text-3xl">📷</span>
+                <div className="text-center">
+                  <p className="text-sm font-body text-vault-text">Drop screenshot here</p>
+                  <p className="text-xs text-vault-muted mt-1">or tap to upload</p>
+                </div>
+                <p className="text-[10px] text-vault-muted/60 font-body">JPEG, PNG, WebP · max 5 MB</p>
+              </div>
+
+              {screenshotError && (
+                <p className="text-sm text-red-400/70 font-body mt-3 text-center">{screenshotError}</p>
+              )}
+
+              <input
+                ref={screenshotInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleScreenshotSelect(file);
+                }}
+              />
+            </div>
+          )}
+
+          {/* ── Step: Screenshot processing ── */}
+          {step === "screenshot-processing" && (
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <div className="w-8 h-8 rounded-full border-2 border-vault-warm border-t-transparent animate-spin" />
+              <p className="text-sm font-body text-vault-muted">Analysing screenshot...</p>
+            </div>
+          )}
+
+          {/* ── Step: Screenshot unknown ── */}
+          {step === "screenshot-unknown" && (
+            <div>
+              <StepHeader title="Screenshot" onBack={() => setStep("choose")} />
+              <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
+                <span className="text-4xl">🤔</span>
+                <div>
+                  <p className="text-sm font-body text-vault-text">Couldn&apos;t identify this screenshot</p>
+                  <p className="text-xs text-vault-muted mt-1.5 leading-relaxed">
+                    Try a clearer image of a movie poster, book cover, or list
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setScreenshotError(null); setStep("screenshot"); }}
+                  className="px-4 py-2 rounded-lg bg-white/[0.06] text-sm font-body text-vault-text hover:bg-white/[0.1] transition-colors"
+                >
+                  Try another image
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step: Bulk ── */}
+          {step === "bulk" && (
+            <div>
+              <StepHeader title="Bulk import" onBack={() => setStep("choose")} />
+              <TypeToggle value={bulkType} onChange={setBulkType} />
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder={bulkType === "movie"
+                  ? "One title per line:\nThe Godfather\nThere Will Be Blood\n2001: A Space Odyssey"
+                  : "One title per line:\nThe Brothers Karamazov\nMidnight's Children\nOne Hundred Years of Solitude"
+                }
+                rows={7}
+                className="w-full px-4 py-3 rounded-xl bg-white/[0.05] border border-white/[0.1] text-sm font-body text-vault-text placeholder:text-vault-muted/50 focus:outline-none focus:border-vault-warm/40 resize-none mb-5 leading-relaxed"
+              />
+              <SaveButton
+                onClick={handleBulkSearch}
+                disabled={!bulkText.trim()}
+                label="Find these"
+              />
+            </div>
+          )}
+
+          {/* ── Step: Bulk review ── */}
+          {step === "bulk-review" && (
+            <div>
+              <StepHeader
+                title={
+                  isBulkSearching
+                    ? "Searching..."
+                    : `Review (${bulkToImportCount} to import)`
+                }
+                onBack={() => setStep(bulkFrom === "screenshot" ? "choose" : "bulk")}
+              />
+
+              {isBulkSearching ? (
+                <ResultsSkeleton count={5} />
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1 mb-6">
+                    {bulkItems.map((item, idx) => (
+                      <BulkReviewRow
+                        key={`${item.sourceId}-${idx}`}
+                        item={item}
+                        onToggle={(checked) =>
+                          setBulkItems((prev) =>
+                            prev.map((p, i) => i === idx ? { ...p, checked } : p)
+                          )
+                        }
+                        onStatusChange={(s) =>
+                          setBulkItems((prev) =>
+                            prev.map((p, i) => i === idx ? { ...p, status: s } : p)
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                  <SaveButton
+                    onClick={handleBulkImport}
+                    disabled={bulkToImportCount === 0}
+                    label={`Import ${bulkToImportCount} item${bulkToImportCount !== 1 ? "s" : ""}`}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Step: Bulk importing ── */}
+          {step === "bulk-importing" && (
+            <div className="flex flex-col items-center justify-center py-16 gap-5">
+              <p className="text-sm font-body text-vault-text">
+                Importing {bulkProgress.current} of {bulkProgress.total}...
+              </p>
+              <div className="w-full bg-white/[0.06] rounded-full h-1.5">
+                <div
+                  className="bg-vault-warm h-1.5 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${bulkProgress.total ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%`,
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -746,6 +1099,83 @@ function SaveButton({
     >
       {label}
     </button>
+  );
+}
+
+function BulkReviewRow({
+  item,
+  onToggle,
+  onStatusChange,
+}: {
+  item: BulkReviewItem;
+  onToggle: (checked: boolean) => void;
+  onStatusChange: (status: string) => void;
+}) {
+  const statusOptions =
+    item.type === "movie"
+      ? [
+          { value: "watched", label: "Watched" },
+          { value: "want_to", label: "Want to watch" },
+        ]
+      : [
+          { value: "read", label: "Read" },
+          { value: "reading", label: "Reading" },
+          { value: "want_to", label: "Want to read" },
+        ];
+
+  return (
+    <div
+      className={`flex items-center gap-3 p-2 rounded-xl transition-opacity ${
+        item.alreadyInVault ? "opacity-40" : ""
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={item.checked && !item.alreadyInVault}
+        disabled={item.alreadyInVault}
+        onChange={(e) => onToggle(e.target.checked)}
+        className="w-4 h-4 rounded shrink-0 cursor-pointer"
+      />
+
+      <div className="w-10 h-[60px] rounded overflow-hidden bg-vault-card-bg shrink-0">
+        {item.coverUrl ? (
+          <img src={item.coverUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-[10px]">
+            {item.type === "movie" ? "🎬" : "📚"}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-body text-vault-text truncate">{item.title}</p>
+        {item.creator && (
+          <p className="text-xs text-vault-muted truncate mt-0.5">{item.creator}</p>
+        )}
+        {item.year && (
+          <p className="text-xs text-vault-muted/60 mt-0.5">{item.year}</p>
+        )}
+      </div>
+
+      {item.alreadyInVault ? (
+        <span className="text-[10px] text-vault-warm shrink-0 px-2 py-1 rounded-full bg-vault-warm/10">
+          In vault
+        </span>
+      ) : (
+        <select
+          value={item.status}
+          onChange={(e) => onStatusChange(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          className="text-[11px] font-body text-vault-muted bg-white/[0.05] border border-white/[0.08] rounded-lg px-2 py-1 focus:outline-none shrink-0 cursor-pointer"
+        >
+          {statusOptions.map((s) => (
+            <option key={s.value} value={s.value} className="bg-vault-elevated text-vault-text">
+              {s.label}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
   );
 }
 

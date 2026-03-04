@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 
-const BUCKET = "covers";
+const DEFAULT_BUCKET = "covers";
 
 export async function POST(request: NextRequest) {
   const supabase = createServiceClient();
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
   const fileName = formData.get("fileName") as string | null;
+  const bucket = (formData.get("bucket") as string | null) ?? DEFAULT_BUCKET;
 
   if (!file || !fileName) {
     return NextResponse.json(
@@ -21,12 +22,12 @@ export async function POST(request: NextRequest) {
 
   // Ensure bucket exists
   const { data: buckets } = await supabase.storage.listBuckets();
-  if (!buckets?.find((b) => b.name === BUCKET)) {
-    await supabase.storage.createBucket(BUCKET, { public: true });
+  if (!buckets?.find((b) => b.name === bucket)) {
+    await supabase.storage.createBucket(bucket, { public: true });
   }
 
   const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .upload(fileName, buffer, {
       contentType: file.type,
       upsert: true,
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   const {
     data: { publicUrl },
-  } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
+  } = supabase.storage.from(bucket).getPublicUrl(fileName);
 
   return NextResponse.json({ url: publicUrl });
 }

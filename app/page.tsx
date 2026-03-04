@@ -122,6 +122,7 @@ export default function Home() {
         onClose={handleClose}
         onSaved={handleSaved}
         prefillQuoteItem={prefillQuoteItem}
+        vaultItems={items}
       />
 
       <Toast

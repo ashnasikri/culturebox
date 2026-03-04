@@ -91,6 +91,11 @@ body {
   animation: shimmer 1.5s infinite;
 }
 
+/* Checkbox */
+input[type="checkbox"] {
+  accent-color: #c4b5a0;
+}
+
 /* Progress slider */
 input[type="range"] {
   -webkit-appearance: none;

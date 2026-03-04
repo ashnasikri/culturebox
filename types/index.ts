@@ -39,13 +39,24 @@ export interface Screenshot {
   created_at: string;
 }
 
-export interface ExtractionResult {
-  type: ItemType;
+export interface BulkReviewItem {
   title: string;
   creator: string;
-  year?: number;
-  quote?: string;
+  year: number | null;
+  coverUrl: string | null;
+  sourceId: string;
+  type: ItemType;
+  status: string;
+  alreadyInVault: boolean;
+  checked: boolean;
 }
+
+export type ExtractionResponse =
+  | { kind: "movie"; title: string; creator?: string; year?: number }
+  | { kind: "book"; title: string; creator?: string; year?: number }
+  | { kind: "quote"; text: string; source_title?: string; source_creator?: string; source_type?: ItemType }
+  | { kind: "list"; items: Array<{ title: string; creator?: string; year?: number; type: ItemType }> }
+  | { kind: "unknown" };
 
 export interface SearchResult {
   title: string;
