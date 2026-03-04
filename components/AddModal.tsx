@@ -88,6 +88,7 @@ export default function AddModal({
   // ── Screenshot state ──
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [aiIdentified, setAiIdentified] = useState<string | null>(null);
+  const [aiAutoSelect, setAiAutoSelect] = useState(false);
   const screenshotInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,7 +111,7 @@ export default function AddModal({
         setQuoteText(""); setSourceQuery(""); setVaultResults([]); setApiResults([]);
         setSelectedSource(null); setCustomTitle(""); setCustomCreator("");
         setShowCustomForm(false); setQuoteType("book");
-        setScreenshotError(null); setAiIdentified(null);
+        setScreenshotError(null); setAiIdentified(null); setAiAutoSelect(false);
         setBulkType("movie"); setBulkText(""); setBulkItems([]);
         setIsBulkSearching(false); setBulkProgress({ current: 0, total: 0 });
       }, 300);
@@ -153,6 +154,15 @@ export default function AddModal({
   }, [debouncedQuery, searchType]);
 
   useEffect(() => { setQuery(""); setResults([]); }, [searchType]);
+
+  // ── Auto-select top result after AI identification ──
+  useEffect(() => {
+    if (aiAutoSelect && results.length > 0 && !isSearching) {
+      setAiAutoSelect(false);
+      handleSelect(results[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, isSearching, aiAutoSelect]);
 
   // ── Quote source search (vault + API) ──
   useEffect(() => {
@@ -320,6 +330,7 @@ export default function AddModal({
             : result.title;
           console.log("[screenshot] identified as", result.kind, ":", label);
           setAiIdentified(label);
+          setAiAutoSelect(true);
           setSearchType(result.kind);
           setQuery(result.title);
           setStep("search");
