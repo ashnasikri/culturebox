@@ -1,101 +1,134 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { Tab, Item, Quote } from "@/types";
+import TabNav from "@/components/TabNav";
+import FAB from "@/components/FAB";
+import CoverGrid from "@/components/CoverGrid";
+import QuoteJournal from "@/components/QuoteJournal";
+import AddModal from "@/components/AddModal";
+import Toast from "@/components/Toast";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [activeTab, setActiveTab] = useState<Tab>("movies");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [prefillQuoteItem, setPrefillQuoteItem] = useState<Item | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+  const [items, setItems] = useState<Item[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(true);
+
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [isLoadingQuotes, setIsLoadingQuotes] = useState(true);
+
+  const [toast, setToast] = useState({ message: "", visible: false });
+
+  const showToast = (message: string) =>
+    setToast({ message, visible: true });
+
+  const fetchItems = useCallback(async () => {
+    try {
+      const res = await fetch("/api/items");
+      const data = await res.json();
+      setItems(data.items ?? []);
+    } catch (err) {
+      console.error("Failed to fetch items:", err);
+    } finally {
+      setIsLoadingItems(false);
+    }
+  }, []);
+
+  const fetchQuotes = useCallback(async () => {
+    try {
+      const res = await fetch("/api/quotes");
+      const data = await res.json();
+      setQuotes(data.quotes ?? []);
+    } catch (err) {
+      console.error("Failed to fetch quotes:", err);
+    } finally {
+      setIsLoadingQuotes(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchItems();
+    fetchQuotes();
+  }, [fetchItems, fetchQuotes]);
+
+  const handleSaved = () => {
+    setModalOpen(false);
+    setPrefillQuoteItem(null);
+    fetchItems();
+    fetchQuotes();
+    showToast("Added to vault");
+  };
+
+  const handleClose = () => {
+    setModalOpen(false);
+    setPrefillQuoteItem(null);
+  };
+
+  const handleCoverUpdate = (id: string, newUrl: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, cover_image_url: newUrl } : item
+      )
+    );
+  };
+
+  const handleQuickQuote = (item: Item) => {
+    setPrefillQuoteItem(item);
+    setModalOpen(true);
+  };
+
+  const movieItems = items.filter((i) => i.type === "movie");
+  const bookItems = items.filter((i) => i.type === "book");
+
+  return (
+    <main className="min-h-screen min-h-dvh max-w-lg mx-auto">
+      <header className="px-4 pt-12 pb-2">
+        <h1 className="font-heading text-2xl tracking-tight text-vault-text">
+          Vault
+        </h1>
+      </header>
+
+      <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <section className="mt-2">
+        {activeTab === "movies" && (
+          <CoverGrid
+            items={movieItems}
+            isLoading={isLoadingItems}
+            onCoverUpdate={handleCoverUpdate}
+            onQuickQuote={handleQuickQuote}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+        )}
+        {activeTab === "books" && (
+          <CoverGrid
+            items={bookItems}
+            isLoading={isLoadingItems}
+            onCoverUpdate={handleCoverUpdate}
+            onQuickQuote={handleQuickQuote}
           />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        )}
+        {activeTab === "quotes" && (
+          <QuoteJournal quotes={quotes} isLoading={isLoadingQuotes} />
+        )}
+      </section>
+
+      <FAB onClick={() => { setPrefillQuoteItem(null); setModalOpen(true); }} />
+
+      <AddModal
+        isOpen={modalOpen}
+        onClose={handleClose}
+        onSaved={handleSaved}
+        prefillQuoteItem={prefillQuoteItem}
+      />
+
+      <Toast
+        message={toast.message}
+        isVisible={toast.visible}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
+    </main>
   );
 }

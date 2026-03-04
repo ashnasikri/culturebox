@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#0d0d14"/>
+  <!-- Subtle border -->
+  <rect x="1.5" y="1.5" width="509" height="509" rx="111" fill="none" stroke="rgba(196,181,160,0.18)" stroke-width="3"/>
+  <!-- V mark -->
+  <path d="M136 155 L256 352 L376 155" fill="none" stroke="#c4b5a0" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
