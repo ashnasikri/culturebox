@@ -95,7 +95,7 @@ export default function CoverGrid({
   onReorder,
 }: CoverGridProps) {
   const sensors = useSensors(
-    useSensor(MouseSensor),
+    useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 500, tolerance: 5 } })
   );
 

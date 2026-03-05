@@ -132,7 +132,7 @@ function SortableListRow({
 
 export default function ListView({ items, isLoading, onItemTap, onReorder }: ListViewProps) {
   const sensors = useSensors(
-    useSensor(MouseSensor),
+    useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 500, tolerance: 5 } })
   );
 

@@ -14,8 +14,8 @@ function statusPriority(status: string): number {
 
 function sortItems(items: Record<string, unknown>[]): Record<string, unknown>[] {
   return [...items].sort((a, b) => {
-    const posA = a.sort_order as number | null;
-    const posB = b.sort_order as number | null;
+    const posA = (a.sort_order as number | null | undefined) ?? null;
+    const posB = (b.sort_order as number | null | undefined) ?? null;
 
     // Items with positions come first, sorted by position
     if (posA !== null && posB !== null) return posA - posB;
