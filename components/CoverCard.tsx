@@ -30,36 +30,33 @@ export default function CoverCard({
         : null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTapAt = useRef(0);
   const touchMoved = useRef(false);
   const lastTouchEndAt = useRef(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Long-press → cover change (mobile)
+  // Single tap → open detail, double tap → change cover
   const handleTouchStart = () => {
     touchMoved.current = false;
-    longPressTimer.current = setTimeout(() => {
-      if (!touchMoved.current) {
-        fileInputRef.current?.click();
-      }
-    }, 600);
   };
 
   const handleTouchEnd = () => {
-    lastTouchEndAt.current = Date.now();
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-      if (!touchMoved.current) {
-        // Short tap → open ItemDetail
-        onItemTap?.(item);
-      }
+    if (touchMoved.current) return;
+    const now = Date.now();
+    lastTouchEndAt.current = now;
+    const timeSinceLast = now - lastTapAt.current;
+    lastTapAt.current = now;
+    if (timeSinceLast < 300) {
+      // Double tap → change cover
+      fileInputRef.current?.click();
+    } else {
+      // Single tap → open detail immediately
+      onItemTap?.(item);
     }
   };
 
   const handleTouchMove = () => {
     touchMoved.current = true;
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
   // Desktop click → open ItemDetail (suppress synthetic click after touch)
