@@ -149,7 +149,7 @@ export default function CoverCard({
         )}
 
         {/* Notes indicator */}
-        {item.notes && item.notes.length > 0 && (
+        {(item.note_count ?? 0) > 0 && (
           <div
             className="absolute bottom-2 left-2 w-2 h-2 rounded-full"
             style={{ background: "#c4b5a0", boxShadow: "0 0 6px rgba(196,181,160,0.5)" }}

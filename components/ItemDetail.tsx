@@ -1,13 +1,26 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Item } from "@/types";
+import { Item, Note } from "@/types";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 const YEARS = Array.from({ length: 12 }, (_, i) => 2026 - i);
+
+function formatNoteDate(iso: string): string {
+  const d = new Date(iso);
+  const month = MONTHS[d.getMonth()];
+  const day = d.getDate();
+  const year = d.getFullYear();
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? "pm" : "am";
+  const hour = h % 12 || 12;
+  const min = String(m).padStart(2, "0");
+  return `${month} ${day}, ${year} · ${hour}:${min}${ampm}`;
+}
 
 interface ItemDetailProps {
   item: Item | null;
@@ -34,7 +47,6 @@ export default function ItemDetail({
   const [finishedMonth, setFinishedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [finishedYear, setFinishedYear] = useState(new Date().getFullYear());
   const [progress, setProgress] = useState(0);
-  const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
 
@@ -44,16 +56,29 @@ export default function ItemDetail({
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
+  // Journal notes
+  const [journalNotes, setJournalNotes] = useState<Note[]>([]);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const [newNoteText, setNewNoteText] = useState("");
+  const [isSavingNote, setIsSavingNote] = useState(false);
+
   useEffect(() => {
     if (item) {
       setStatus(item.status);
       setFinishedMonth(item.finished_month ?? MONTHS[new Date().getMonth()]);
       setFinishedYear(item.finished_year ?? new Date().getFullYear());
       setProgress(item.progress ?? 0);
-      setNotes(item.notes ?? "");
       setShowDeleteConfirm(false);
       setCascadeQuotes(false);
       setJustSaved(false);
+      setNewNoteText("");
+      // Fetch notes for this item
+      setIsLoadingNotes(true);
+      fetch(`/api/notes?item_id=${item.id}`)
+        .then((r) => r.json())
+        .then((d) => setJournalNotes(d.notes ?? []))
+        .catch(console.error)
+        .finally(() => setIsLoadingNotes(false));
     }
   }, [item]);
 
@@ -107,8 +132,7 @@ export default function ItemDetail({
     (showFinished &&
       (finishedMonth !== item.finished_month ||
         finishedYear !== (item.finished_year ?? 0))) ||
-    (showProgress && progress !== (item.progress ?? 0)) ||
-    notes !== (item.notes ?? "");
+    (showProgress && progress !== (item.progress ?? 0));
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -118,7 +142,6 @@ export default function ItemDetail({
         progress: showProgress ? progress : null,
         finished_month: showFinished ? finishedMonth : null,
         finished_year: showFinished ? finishedYear : null,
-        notes: notes.trim() || null,
       };
       const res = await fetch(`/api/items/${item.id}`, {
         method: "PATCH",
@@ -127,7 +150,6 @@ export default function ItemDetail({
       });
       if (!res.ok) throw new Error("Save failed");
       const data = await res.json();
-      // Update list state without closing the sheet
       onUpdated(data.item);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 1800);
@@ -151,6 +173,38 @@ export default function ItemDetail({
       console.error("Delete error:", err);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!newNoteText.trim() || !item) return;
+    setIsSavingNote(true);
+    try {
+      const res = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: item.id, text: newNoteText.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to save note");
+      const { note } = await res.json();
+      setJournalNotes((prev) => [...prev, note]);
+      setNewNoteText("");
+      // Bump note_count in parent
+      onUpdated({ ...item, note_count: (item.note_count ?? 0) + 1 });
+    } catch (err) {
+      console.error("Note save error:", err);
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
+      setJournalNotes((prev) => prev.filter((n) => n.id !== noteId));
+      onUpdated({ ...item, note_count: Math.max(0, (item.note_count ?? 1) - 1) });
+    } catch (err) {
+      console.error("Note delete error:", err);
     }
   };
 
@@ -361,33 +415,11 @@ export default function ItemDetail({
                 </div>
               )}
 
-              {/* Notes */}
-              <div className="mb-6">
-                <p className="text-[11px] text-vault-muted/60 font-body uppercase tracking-[0.06em] mb-2">
-                  Notes
-                </p>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Write your thoughts..."
-                  rows={4}
-                  className="w-full px-4 py-3 rounded-xl text-[14px] leading-[1.7] focus:outline-none transition-colors resize-y font-quote italic placeholder:not-italic placeholder:font-body"
-                  style={{
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                    color: "rgba(255,255,255,0.82)",
-                    minHeight: "120px",
-                  }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(196,181,160,0.3)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)")}
-                />
-              </div>
-
               {/* Save */}
               <button
                 onClick={handleSave}
                 disabled={isSaving || !hasChanges}
-                className="w-full py-3 rounded-xl font-body font-bold text-sm transition-all mb-8"
+                className="w-full py-3 rounded-xl font-body font-bold text-sm transition-all mb-6"
                 style={justSaved
                   ? { background: "rgba(196,181,160,0.12)", color: "rgba(196,181,160,0.7)", border: "1px solid rgba(196,181,160,0.2)" }
                   : { background: "linear-gradient(135deg, #a89882, #8a7d6b)", color: "#1a1a28", opacity: (isSaving || !hasChanges) ? 0.3 : 1 }
@@ -395,6 +427,93 @@ export default function ItemDetail({
               >
                 {isSaving ? "Saving..." : justSaved ? "✓ Saved" : "Save Changes"}
               </button>
+
+              {/* ── Journal Notes ── */}
+              <div className="mb-8">
+                <p className="text-[11px] text-vault-muted/60 font-body uppercase tracking-[0.06em] mb-3">
+                  Notes
+                </p>
+
+                {/* Existing notes */}
+                {isLoadingNotes ? (
+                  <div className="space-y-2 mb-3">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="h-12 rounded-xl bg-white/[0.03] animate-shimmer" />
+                    ))}
+                  </div>
+                ) : journalNotes.length > 0 ? (
+                  <div className="space-y-2 mb-3">
+                    {journalNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        className="group/note flex items-start gap-3 px-4 py-3 rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.03)",
+                          border: "1px solid rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className="text-[13px] leading-[1.65] font-quote italic"
+                            style={{ color: "rgba(255,255,255,0.82)" }}
+                          >
+                            {note.text}
+                          </p>
+                          <p className="text-[10px] font-body mt-1.5" style={{ color: "rgba(255,255,255,0.25)" }}>
+                            {formatNoteDate(note.created_at)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteNote(note.id)}
+                          className="shrink-0 opacity-0 group-hover/note:opacity-100 transition-opacity mt-0.5"
+                          title="Delete note"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                            stroke="rgba(255,100,100,0.5)" strokeWidth="1.8" strokeLinecap="round">
+                            <line x1="1" y1="1" x2="11" y2="11" />
+                            <line x1="11" y1="1" x2="1" y2="11" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* New note input */}
+                <div className="flex flex-col gap-2">
+                  <textarea
+                    value={newNoteText}
+                    onChange={(e) => setNewNoteText(e.target.value)}
+                    placeholder="Add a note…"
+                    rows={3}
+                    className="w-full px-4 py-3 rounded-xl text-[14px] leading-[1.7] focus:outline-none transition-colors resize-none font-quote italic placeholder:not-italic placeholder:font-body"
+                    style={{
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                      color: "rgba(255,255,255,0.82)",
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(196,181,160,0.3)")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddNote();
+                    }}
+                  />
+                  {newNoteText.trim() && (
+                    <button
+                      onClick={handleAddNote}
+                      disabled={isSavingNote}
+                      className="self-end px-4 py-1.5 rounded-lg text-xs font-body font-medium transition-opacity disabled:opacity-40"
+                      style={{
+                        background: "rgba(196,181,160,0.12)",
+                        border: "1px solid rgba(196,181,160,0.2)",
+                        color: "rgba(196,181,160,0.9)",
+                      }}
+                    >
+                      {isSavingNote ? "Saving…" : "Add note"}
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {/* Delete */}
               <div className="flex justify-center">

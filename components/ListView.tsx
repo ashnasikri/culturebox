@@ -102,9 +102,9 @@ function SortableListRow({
             {[item.creator, item.year].filter(Boolean).join(" · ")}
           </p>
           <p className={`text-xs font-body mt-1.5 ${statusColor}`}>{statusLine}</p>
-          {item.notes && (
-            <p className="text-[11px] font-body mt-1 truncate" style={{ color: "rgba(255,255,255,0.3)" }}>
-              {item.notes}
+          {(item.note_count ?? 0) > 0 && (
+            <p className="text-[11px] font-body mt-1" style={{ color: "rgba(196,181,160,0.5)" }}>
+              {item.note_count} {item.note_count === 1 ? "note" : "notes"}
             </p>
           )}
           {isReading && (

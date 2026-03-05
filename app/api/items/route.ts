@@ -58,7 +58,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ items: sortItems(data ?? []) });
+  const items = data ?? [];
+
+  // Fetch note counts for all items
+  const { data: noteCounts } = await supabase
+    .from("notes")
+    .select("item_id")
+    .in("item_id", items.map((i) => i.id));
+
+  const countMap: Record<string, number> = {};
+  for (const row of noteCounts ?? []) {
+    countMap[row.item_id] = (countMap[row.item_id] ?? 0) + 1;
+  }
+
+  const itemsWithCounts = items.map((item) => ({
+    ...item,
+    note_count: countMap[item.id] ?? 0,
+  }));
+
+  return NextResponse.json({ items: sortItems(itemsWithCounts) });
 }
 
 export async function POST(request: NextRequest) {

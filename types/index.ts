@@ -20,6 +20,14 @@ export interface Item {
   created_at: string;
   sort_order: number | null;
   notes: string | null;
+  note_count?: number;
+}
+
+export interface Note {
+  id: string;
+  item_id: string;
+  text: string;
+  created_at: string;
 }
 
 export interface Quote {
