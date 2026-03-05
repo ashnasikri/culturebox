@@ -18,7 +18,11 @@ function sortItems(items: Record<string, unknown>[]): Record<string, unknown>[] 
     const posB = (b.sort_order as number | null | undefined) ?? null;
 
     // Items with positions come first, sorted by position
-    if (posA !== null && posB !== null) return posA - posB;
+    if (posA !== null && posB !== null) {
+      if (posA !== posB) return posA - posB;
+      // Tiebreaker: created_at asc
+      return new Date(a.created_at as string).getTime() - new Date(b.created_at as string).getTime();
+    }
     if (posA !== null) return -1;
     if (posB !== null) return 1;
 
