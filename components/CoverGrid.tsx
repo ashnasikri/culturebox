@@ -28,19 +28,6 @@ interface CoverGridProps {
   onReorder?: (newOrder: Item[]) => void;
 }
 
-function GripDots() {
-  return (
-    <svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor">
-      <circle cx="2.5" cy="2.5" r="1.5" />
-      <circle cx="8" cy="2.5" r="1.5" />
-      <circle cx="13.5" cy="2.5" r="1.5" />
-      <circle cx="2.5" cy="7.5" r="1.5" />
-      <circle cx="8" cy="7.5" r="1.5" />
-      <circle cx="13.5" cy="7.5" r="1.5" />
-    </svg>
-  );
-}
-
 function SortableCard({
   item,
   onCoverUpdate,
@@ -71,17 +58,9 @@ function SortableCard({
         onCoverUpdate={onCoverUpdate}
         onQuickQuote={onQuickQuote}
         onItemTap={onItemTap}
+        dragListeners={listeners as unknown as Record<string, unknown>}
+        dragAttributes={attributes as unknown as Record<string, unknown>}
       />
-      {/* Drag handle below card */}
-      <div
-        {...listeners}
-        {...attributes}
-        className="flex justify-center items-center py-1 cursor-grab active:cursor-grabbing select-none text-vault-muted/25 hover:text-vault-muted/60 transition-colors"
-        style={{ touchAction: "none" }}
-        title="Drag to reorder"
-      >
-        <GripDots />
-      </div>
     </div>
   );
 }

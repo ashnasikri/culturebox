@@ -9,6 +9,8 @@ interface CoverCardProps {
   onCoverUpdate?: (id: string, newUrl: string) => void;
   onQuickQuote?: (item: Item) => void;
   onItemTap?: (item: Item) => void;
+  dragListeners?: Record<string, unknown>;
+  dragAttributes?: Record<string, unknown>;
 }
 
 export default function CoverCard({
@@ -16,6 +18,8 @@ export default function CoverCard({
   onCoverUpdate,
   onQuickQuote,
   onItemTap,
+  dragListeners,
+  dragAttributes,
 }: CoverCardProps) {
   const isWantTo = item.status === "want_to";
   const isReading = item.status === "reading";
@@ -30,40 +34,9 @@ export default function CoverCard({
         : null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const lastTapAt = useRef(0);
-  const touchMoved = useRef(false);
-  const lastTouchEndAt = useRef(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Single tap → open detail, double tap → change cover
-  const handleTouchStart = () => {
-    touchMoved.current = false;
-  };
-
-  const handleTouchEnd = () => {
-    if (touchMoved.current) return;
-    const now = Date.now();
-    lastTouchEndAt.current = now;
-    const timeSinceLast = now - lastTapAt.current;
-    lastTapAt.current = now;
-    if (timeSinceLast < 300) {
-      // Double tap → change cover
-      fileInputRef.current?.click();
-    } else {
-      // Single tap → open detail immediately
-      onItemTap?.(item);
-    }
-  };
-
-  const handleTouchMove = () => {
-    touchMoved.current = true;
-  };
-
-  // Desktop click → open ItemDetail (suppress synthetic click after touch)
-  const handleClick = () => {
-    if (Date.now() - lastTouchEndAt.current < 600) return;
-    onItemTap?.(item);
-  };
+  const handleClick = () => onItemTap?.(item);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,9 +72,6 @@ export default function CoverCard({
     <div
       className={`group relative flex flex-col cursor-pointer ${isWantTo ? "want-to-item" : ""}`}
       onClick={handleClick}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={handleTouchMove}
     >
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-vault-card-bg border border-vault-card-border">
         {item.cover_image_url ? (
@@ -175,6 +145,25 @@ export default function CoverCard({
         {isReading && item.progress != null && (
           <div className="absolute bottom-0 left-0 right-0 p-1">
             <ProgressBar progress={item.progress} />
+          </div>
+        )}
+
+        {/* Drag handle — only rendered when dragging is enabled */}
+        {dragListeners && (
+          <div
+            {...(dragListeners as React.HTMLAttributes<HTMLDivElement>)}
+            {...(dragAttributes as React.HTMLAttributes<HTMLDivElement>)}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-md bg-black/50 backdrop-blur-sm flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+            style={{ touchAction: "none" }}
+            title="Drag to reorder"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="rgba(255,255,255,0.6)">
+              <circle cx="2" cy="2" r="1.2" />
+              <circle cx="8" cy="2" r="1.2" />
+              <circle cx="2" cy="8" r="1.2" />
+              <circle cx="8" cy="8" r="1.2" />
+            </svg>
           </div>
         )}
       </div>
