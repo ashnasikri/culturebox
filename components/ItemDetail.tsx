@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Item } from "@/types";
 
 const MONTHS = [
@@ -14,6 +14,7 @@ interface ItemDetailProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdated: (item: Item) => void;
+  onCoverUpdated: (id: string, newUrl: string) => void;
   onDeleted: (id: string) => void;
   linkedQuotesCount: number;
   onShowToast: (msg: string) => void;
@@ -24,6 +25,7 @@ export default function ItemDetail({
   isOpen,
   onClose,
   onUpdated,
+  onCoverUpdated,
   onDeleted,
   linkedQuotesCount,
   onShowToast,
@@ -37,6 +39,8 @@ export default function ItemDetail({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cascadeQuotes, setCascadeQuotes] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (item) {
@@ -48,6 +52,34 @@ export default function ItemDetail({
       setCascadeQuotes(false);
     }
   }, [item]);
+
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !item) return;
+    setIsUploadingCover(true);
+    try {
+      const ext = file.type.split("/")[1] || "jpg";
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("fileName", `${Date.now()}-${item.id}.${ext}`);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      const { url } = await uploadRes.json();
+      if (!url) throw new Error("Upload failed");
+      const patchRes = await fetch(`/api/items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cover_image_url: url }),
+      });
+      if (!patchRes.ok) throw new Error("DB update failed");
+      onCoverUpdated(item.id, url);
+      onShowToast("Cover updated");
+    } catch (err) {
+      console.error("Cover upload error:", err);
+    } finally {
+      setIsUploadingCover(false);
+      e.target.value = "";
+    }
+  };
 
   if (!isOpen || !item) return null;
 
@@ -131,7 +163,7 @@ export default function ItemDetail({
         <div className="overflow-y-auto px-6 pb-10">
           {/* Cover + title */}
           <div className="flex flex-col items-center text-center mb-6 mt-2">
-            <div className="rounded-lg overflow-hidden mb-4 bg-vault-card-bg border border-vault-card-border">
+            <div className="relative rounded-lg overflow-hidden mb-2 bg-vault-card-bg border border-vault-card-border">
               {item.cover_image_url ? (
                 <img
                   src={item.cover_image_url}
@@ -143,7 +175,26 @@ export default function ItemDetail({
                   {item.type === "movie" ? "🎬" : "📚"}
                 </div>
               )}
+              {isUploadingCover && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <div className="w-5 h-5 rounded-full border-2 border-vault-warm border-t-transparent animate-spin" />
+                </div>
+              )}
             </div>
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={isUploadingCover}
+              className="text-xs text-vault-muted hover:text-vault-text transition-colors font-body mb-3 disabled:opacity-40"
+            >
+              {isUploadingCover ? "Uploading…" : "Change cover"}
+            </button>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleCoverChange}
+            />
             <h2 className="font-heading text-lg text-vault-text leading-tight px-4">
               {item.title}
             </h2>

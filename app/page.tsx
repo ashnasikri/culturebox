@@ -103,6 +103,7 @@ export default function Home() {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, cover_image_url: newUrl } : item))
     );
+    setDetailItem((prev) => (prev?.id === id ? { ...prev, cover_image_url: newUrl } : prev));
   };
 
   const handleQuickQuote = (item: Item) => {
@@ -217,6 +218,7 @@ export default function Home() {
         isOpen={detailItem !== null}
         onClose={() => setDetailItem(null)}
         onUpdated={handleItemUpdated}
+        onCoverUpdated={handleCoverUpdate}
         onDeleted={handleItemDeleted}
         linkedQuotesCount={linkedQuotesCount}
         onShowToast={showToast}
