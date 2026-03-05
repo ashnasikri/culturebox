@@ -19,6 +19,7 @@ export interface Item {
   openlibrary_id: string | null;
   created_at: string;
   sort_order: number | null;
+  notes: string | null;
 }
 
 export interface Quote {

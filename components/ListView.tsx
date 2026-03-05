@@ -102,6 +102,11 @@ function SortableListRow({
             {[item.creator, item.year].filter(Boolean).join(" · ")}
           </p>
           <p className={`text-xs font-body mt-1.5 ${statusColor}`}>{statusLine}</p>
+          {item.notes && (
+            <p className="text-[11px] font-body mt-1 truncate" style={{ color: "rgba(255,255,255,0.3)" }}>
+              {item.notes}
+            </p>
+          )}
           {isReading && (
             <div className="mt-1.5 h-[2px] w-full max-w-[160px] bg-white/[0.08] rounded-full overflow-hidden">
               <div

@@ -148,6 +148,14 @@ export default function CoverCard({
           </div>
         )}
 
+        {/* Notes indicator */}
+        {item.notes && item.notes.length > 0 && (
+          <div
+            className="absolute bottom-2 left-2 w-2 h-2 rounded-full"
+            style={{ background: "#c4b5a0", boxShadow: "0 0 6px rgba(196,181,160,0.5)" }}
+          />
+        )}
+
         {/* Drag handle — only rendered when dragging is enabled */}
         {dragListeners && (
           <div

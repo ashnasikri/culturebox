@@ -34,7 +34,9 @@ export default function ItemDetail({
   const [finishedMonth, setFinishedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [finishedYear, setFinishedYear] = useState(new Date().getFullYear());
   const [progress, setProgress] = useState(0);
+  const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cascadeQuotes, setCascadeQuotes] = useState(false);
@@ -48,8 +50,10 @@ export default function ItemDetail({
       setFinishedMonth(item.finished_month ?? MONTHS[new Date().getMonth()]);
       setFinishedYear(item.finished_year ?? new Date().getFullYear());
       setProgress(item.progress ?? 0);
+      setNotes(item.notes ?? "");
       setShowDeleteConfirm(false);
       setCascadeQuotes(false);
+      setJustSaved(false);
     }
   }, [item]);
 
@@ -103,7 +107,8 @@ export default function ItemDetail({
     (showFinished &&
       (finishedMonth !== item.finished_month ||
         finishedYear !== (item.finished_year ?? 0))) ||
-    (showProgress && progress !== (item.progress ?? 0));
+    (showProgress && progress !== (item.progress ?? 0)) ||
+    notes !== (item.notes ?? "");
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -113,6 +118,7 @@ export default function ItemDetail({
         progress: showProgress ? progress : null,
         finished_month: showFinished ? finishedMonth : null,
         finished_year: showFinished ? finishedYear : null,
+        notes: notes.trim() || null,
       };
       const res = await fetch(`/api/items/${item.id}`, {
         method: "PATCH",
@@ -121,9 +127,10 @@ export default function ItemDetail({
       });
       if (!res.ok) throw new Error("Save failed");
       const data = await res.json();
+      // Update list state without closing the sheet
       onUpdated(data.item);
-      onClose();
-      onShowToast("Changes saved");
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 1800);
     } catch (err) {
       console.error("Save error:", err);
     } finally {
@@ -155,9 +162,18 @@ export default function ItemDetail({
         style={{ background: "#1a1a28" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Handle */}
-        <div className="shrink-0 pt-3 pb-1">
+        {/* Handle + close */}
+        <div className="shrink-0 pt-3 pb-1 relative">
           <div className="w-10 h-1 rounded-full bg-white/10 mx-auto" />
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-2 w-7 h-7 flex items-center justify-center rounded-full text-vault-muted hover:text-vault-text transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="1" y1="1" x2="11" y2="11" />
+              <line x1="11" y1="1" x2="1" y2="11" />
+            </svg>
+          </button>
         </div>
 
         <div className="overflow-y-auto px-6 pb-10">
@@ -345,14 +361,39 @@ export default function ItemDetail({
                 </div>
               )}
 
+              {/* Notes */}
+              <div className="mb-6">
+                <p className="text-[11px] text-vault-muted/60 font-body uppercase tracking-[0.06em] mb-2">
+                  Notes
+                </p>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Write your thoughts..."
+                  rows={4}
+                  className="w-full px-4 py-3 rounded-xl text-[14px] leading-[1.7] focus:outline-none transition-colors resize-y font-quote italic placeholder:not-italic placeholder:font-body"
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    color: "rgba(255,255,255,0.82)",
+                    minHeight: "120px",
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(196,181,160,0.3)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)")}
+                />
+              </div>
+
               {/* Save */}
               <button
                 onClick={handleSave}
                 disabled={isSaving || !hasChanges}
-                className="w-full py-3 rounded-xl font-body font-bold text-sm text-vault-bg transition-opacity disabled:opacity-30 mb-8"
-                style={{ background: "linear-gradient(135deg, #a89882, #8a7d6b)" }}
+                className="w-full py-3 rounded-xl font-body font-bold text-sm transition-all mb-8"
+                style={justSaved
+                  ? { background: "rgba(196,181,160,0.12)", color: "rgba(196,181,160,0.7)", border: "1px solid rgba(196,181,160,0.2)" }
+                  : { background: "linear-gradient(135deg, #a89882, #8a7d6b)", color: "#1a1a28", opacity: (isSaving || !hasChanges) ? 0.3 : 1 }
+                }
               >
-                {isSaving ? "Saving..." : "Save Changes"}
+                {isSaving ? "Saving..." : justSaved ? "✓ Saved" : "Save Changes"}
               </button>
 
               {/* Delete */}

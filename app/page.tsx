@@ -114,7 +114,7 @@ export default function Home() {
   // ItemDetail callbacks
   const handleItemUpdated = (updated: Item) => {
     setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-    setDetailItem(null);
+    setDetailItem(updated);
   };
 
   const handleItemDeleted = (id: string) => {
