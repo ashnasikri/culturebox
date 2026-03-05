@@ -11,9 +11,38 @@ import AddModal from "@/components/AddModal";
 import ItemDetail from "@/components/ItemDetail";
 import Toast from "@/components/Toast";
 
+const VIEW_STORAGE_KEYS: Record<string, string> = {
+  movies: "vault-view-movies",
+  books: "vault-view-books",
+};
+
+function loadViewPref(tab: string): "grid" | "list" {
+  if (typeof window === "undefined") return "grid";
+  return (localStorage.getItem(VIEW_STORAGE_KEYS[tab]) as "grid" | "list") ?? "grid";
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("movies");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewModes, setViewModes] = useState<Record<string, "grid" | "list">>({
+    movies: "grid",
+    books: "grid",
+  });
+
+  // Load persisted preferences on mount
+  useEffect(() => {
+    setViewModes({
+      movies: loadViewPref("movies"),
+      books: loadViewPref("books"),
+    });
+  }, []);
+
+  const viewMode = activeTab === "quotes" ? "list" : (viewModes[activeTab] ?? "grid");
+
+  const handleViewModeChange = (mode: "grid" | "list") => {
+    if (activeTab === "quotes") return;
+    setViewModes((prev) => ({ ...prev, [activeTab]: mode }));
+    localStorage.setItem(VIEW_STORAGE_KEYS[activeTab], mode);
+  };
   const [modalOpen, setModalOpen] = useState(false);
   const [prefillQuoteItem, setPrefillQuoteItem] = useState<Item | null>(null);
 
@@ -100,6 +129,20 @@ export default function Home() {
     showToast("Quote deleted");
   };
 
+  const handleReorder = async (type: "movie" | "book", newOrder: Item[]) => {
+    // Optimistic update — replace items of this type with new order
+    setItems((prev) => {
+      const others = prev.filter((i) => i.type !== type);
+      return [...others, ...newOrder];
+    });
+    // Persist positions
+    await fetch("/api/items/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: newOrder.map((i) => i.id) }),
+    });
+  };
+
   const movieItems = items.filter((i) => i.type === "movie");
   const bookItems = items.filter((i) => i.type === "book");
 
@@ -124,28 +167,30 @@ export default function Home() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
       />
 
       <section className="mt-2">
         {activeTab === "movies" && viewMode === "grid" && (
-          <CoverGrid items={movieItems} {...sharedGridProps} />
+          <CoverGrid items={movieItems} {...sharedGridProps} onReorder={(o) => handleReorder("movie", o)} />
         )}
         {activeTab === "movies" && viewMode === "list" && (
           <ListView
             items={movieItems}
             isLoading={isLoadingItems}
             onItemTap={setDetailItem}
+            onReorder={(o) => handleReorder("movie", o)}
           />
         )}
         {activeTab === "books" && viewMode === "grid" && (
-          <CoverGrid items={bookItems} {...sharedGridProps} />
+          <CoverGrid items={bookItems} {...sharedGridProps} onReorder={(o) => handleReorder("book", o)} />
         )}
         {activeTab === "books" && viewMode === "list" && (
           <ListView
             items={bookItems}
             isLoading={isLoadingItems}
             onItemTap={setDetailItem}
+            onReorder={(o) => handleReorder("book", o)}
           />
         )}
         {activeTab === "quotes" && (

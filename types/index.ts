@@ -18,6 +18,7 @@ export interface Item {
   imdb_id: string | null;
   openlibrary_id: string | null;
   created_at: string;
+  sort_order: number | null;
 }
 
 export interface Quote {

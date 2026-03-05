@@ -1,14 +1,141 @@
 "use client";
 
 import { Item } from "@/types";
+import {
+  DndContext,
+  DragEndEvent,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface ListViewProps {
   items: Item[];
   isLoading?: boolean;
   onItemTap?: (item: Item) => void;
+  onReorder?: (newOrder: Item[]) => void;
 }
 
-export default function ListView({ items, isLoading, onItemTap }: ListViewProps) {
+function GripLines() {
+  return (
+    <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor">
+      <rect x="0" y="0" width="14" height="2" rx="1" />
+      <rect x="0" y="5" width="14" height="2" rx="1" />
+      <rect x="0" y="10" width="14" height="2" rx="1" />
+    </svg>
+  );
+}
+
+function SortableListRow({
+  item,
+  isLast,
+  onTap,
+}: {
+  item: Item;
+  isLast: boolean;
+  onTap: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id });
+
+  const isWantTo = item.status === "want_to";
+  const isReading = item.status === "reading";
+  const isFinished = item.status === "watched" || item.status === "read";
+
+  const statusLine = isFinished
+    ? `✓ ${item.status === "watched" ? "Watched" : "Read"}${
+        item.finished_month ? ` · ${item.finished_month} ${item.finished_year ?? ""}` : ""
+      }`
+    : isReading
+    ? `Reading · ${item.progress ?? 0}%`
+    : item.type === "movie"
+    ? "Want to Watch"
+    : "Want to Read";
+
+  const statusColor = isFinished
+    ? "text-vault-text/70"
+    : isReading
+    ? "text-vault-warm"
+    : "text-vault-muted/60";
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.35 : 1,
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      className={`flex items-center ${!isLast ? "border-b border-white/[0.05]" : ""} ${isWantTo ? "opacity-50" : ""}`}
+    >
+      {/* Drag handle */}
+      <div
+        {...listeners}
+        {...attributes}
+        className="pr-3 py-4 cursor-grab active:cursor-grabbing select-none text-vault-muted/25 hover:text-vault-muted/60 transition-colors shrink-0"
+        style={{ touchAction: "none" }}
+        title="Drag to reorder"
+      >
+        <GripLines />
+      </div>
+
+      {/* Row content */}
+      <button
+        onClick={onTap}
+        className="flex items-center gap-4 py-4 text-left flex-1 min-w-0 transition-colors hover:bg-white/[0.02] active:bg-white/[0.04]"
+      >
+        <div className="flex-1 min-w-0">
+          <p className="font-body font-semibold text-vault-text text-[15px] leading-snug truncate">
+            {item.title}
+          </p>
+          <p className="text-xs text-vault-muted font-body mt-0.5 truncate">
+            {[item.creator, item.year].filter(Boolean).join(" · ")}
+          </p>
+          <p className={`text-xs font-body mt-1.5 ${statusColor}`}>{statusLine}</p>
+          {isReading && (
+            <div className="mt-1.5 h-[2px] w-full max-w-[160px] bg-white/[0.08] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-vault-warm"
+                style={{ width: `${item.progress ?? 0}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="w-12 h-[60px] rounded-md overflow-hidden bg-vault-card-bg border border-vault-card-border shrink-0">
+          {item.cover_image_url ? (
+            <img
+              src={item.cover_image_url}
+              alt={item.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-vault-muted text-xs">
+              {item.type === "movie" ? "🎬" : "📖"}
+            </div>
+          )}
+        </div>
+      </button>
+    </div>
+  );
+}
+
+export default function ListView({ items, isLoading, onItemTap, onReorder }: ListViewProps) {
+  const sensors = useSensors(
+    useSensor(MouseSensor),
+    useSensor(TouchSensor, { activationConstraint: { delay: 500, tolerance: 5 } })
+  );
+
   if (isLoading) {
     return (
       <div className="flex flex-col px-4 pb-24">
@@ -35,93 +162,29 @@ export default function ListView({ items, isLoading, onItemTap }: ListViewProps)
     );
   }
 
-  return (
-    <div className="flex flex-col px-4 pb-24">
-      {items.map((item, idx) => (
-        <ListRow
-          key={item.id}
-          item={item}
-          isLast={idx === items.length - 1}
-          onTap={() => onItemTap?.(item)}
-        />
-      ))}
-    </div>
-  );
-}
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-function ListRow({
-  item,
-  isLast,
-  onTap,
-}: {
-  item: Item;
-  isLast: boolean;
-  onTap: () => void;
-}) {
-  const isWantTo = item.status === "want_to";
-  const isReading = item.status === "reading";
-  const isFinished = item.status === "watched" || item.status === "read";
-
-  const statusLine = isFinished
-    ? `✓ ${item.status === "watched" ? "Watched" : "Read"}${
-        item.finished_month ? ` · ${item.finished_month} ${item.finished_year ?? ""}` : ""
-      }`
-    : isReading
-    ? `Reading · ${item.progress ?? 0}%`
-    : item.type === "movie"
-    ? "Want to Watch"
-    : "Want to Read";
-
-  const statusColor = isFinished
-    ? "text-vault-text/70"
-    : isReading
-    ? "text-vault-warm"
-    : "text-vault-muted/60";
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    onReorder?.(arrayMove(items, oldIndex, newIndex));
+  }
 
   return (
-    <button
-      onClick={onTap}
-      className={`flex items-center gap-4 py-4 text-left w-full transition-colors hover:bg-white/[0.02] active:bg-white/[0.04] ${
-        !isLast ? "border-b border-white/[0.05]" : ""
-      } ${isWantTo ? "opacity-50" : ""}`}
-    >
-      {/* Text */}
-      <div className="flex-1 min-w-0">
-        <p className="font-body font-semibold text-vault-text text-[15px] leading-snug truncate">
-          {item.title}
-        </p>
-        <p className="text-xs text-vault-muted font-body mt-0.5 truncate">
-          {[item.creator, item.year].filter(Boolean).join(" · ")}
-        </p>
-
-        {/* Status line */}
-        <p className={`text-xs font-body mt-1.5 ${statusColor}`}>{statusLine}</p>
-
-        {/* Reading progress bar */}
-        {isReading && (
-          <div className="mt-1.5 h-[2px] w-full max-w-[160px] bg-white/[0.08] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-vault-warm"
-              style={{ width: `${item.progress ?? 0}%` }}
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col px-4 pb-24">
+          {items.map((item, idx) => (
+            <SortableListRow
+              key={item.id}
+              item={item}
+              isLast={idx === items.length - 1}
+              onTap={() => onItemTap?.(item)}
             />
-          </div>
-        )}
-      </div>
-
-      {/* Cover thumb */}
-      <div className="w-12 h-[60px] rounded-md overflow-hidden bg-vault-card-bg border border-vault-card-border shrink-0">
-        {item.cover_image_url ? (
-          <img
-            src={item.cover_image_url}
-            alt={item.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-vault-muted text-xs">
-            {item.type === "movie" ? "🎬" : "📖"}
-          </div>
-        )}
-      </div>
-    </button>
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
   );
 }
