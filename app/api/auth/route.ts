@@ -1,30 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac } from "crypto";
+import { createHash } from "crypto";
 
-function makeToken(password: string): string {
-  const secret = process.env.VAULT_COOKIE_SECRET ?? "vault-secret";
-  return createHmac("sha256", secret).update(password).digest("hex");
+// Same algorithm as middleware: SHA-256(password + secret)
+function makeToken(password: string, secret: string): string {
+  return createHash("sha256").update(password + secret).digest("hex");
 }
 
 export async function POST(request: NextRequest) {
-  const { password } = await request.json();
-  const expected = process.env.VAULT_PASSWORD;
+  try {
+    const { password } = await request.json();
+    const expected = process.env.VAULT_PASSWORD;
+    const secret = process.env.VAULT_COOKIE_SECRET ?? "vault-secret";
 
-  if (!expected || password !== expected) {
+    if (!expected || !password || password !== expected) {
+      return NextResponse.json(
+        { success: false, error: "Wrong password" },
+        { status: 401 }
+      );
+    }
+
+    const token = makeToken(password, secret);
+
+    const res = NextResponse.json({ success: true });
+    res.cookies.set("vault-auth", token, {
+      httpOnly: true,
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365, // 365 days
+    });
+    return res;
+  } catch {
     return NextResponse.json(
-      { success: false, error: "Wrong password" },
-      { status: 401 }
+      { success: false, error: "Server error" },
+      { status: 500 }
     );
   }
-
-  const token = makeToken(password);
-
-  const res = NextResponse.json({ success: true });
-  res.cookies.set("vault-auth", token, {
-    httpOnly: true,
-    sameSite: "strict",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365, // 365 days
-  });
-  return res;
 }
