@@ -52,8 +52,8 @@ export default function Confetti({ onDone }: ConfettiProps) {
       swayOffset: Math.random() * Math.PI * 2,
     }));
 
-    const DURATION = 3000;
-    const FADE_START = 2000;
+    const DURATION = 5000;
+    const FADE_START = 3500;
     const start = performance.now();
     let rafId: number;
 
