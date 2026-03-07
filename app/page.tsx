@@ -10,6 +10,7 @@ import QuoteJournal from "@/components/QuoteJournal";
 import AddModal from "@/components/AddModal";
 import ItemDetail from "@/components/ItemDetail";
 import Toast from "@/components/Toast";
+import Confetti from "@/components/Confetti";
 
 const VIEW_STORAGE_KEYS: Record<string, string> = {
   movies: "vault-view-movies",
@@ -56,6 +57,26 @@ export default function Home() {
 
   const [toast, setToast] = useState({ message: "", visible: false });
   const showToast = (message: string) => setToast({ message, visible: true });
+
+  const CELEBRATION_MESSAGES = [
+    "📚 Another one down!",
+    "🎉 Finished! What a journey.",
+    "✨ Book complete. On to the next.",
+    "🏆 That's a wrap!",
+    "📖 Done! How do you feel?",
+    "🌟 One more for the shelf.",
+    "🔥 You're on a reading streak!",
+    "💫 Finished. Let that one sink in.",
+  ];
+
+  const [celebrating, setCelebrating] = useState(false);
+  const [celebrationMessage, setCelebrationMessage] = useState("");
+
+  const handleCelebrate = () => {
+    const msg = CELEBRATION_MESSAGES[Math.floor(Math.random() * CELEBRATION_MESSAGES.length)];
+    setCelebrationMessage(msg);
+    setCelebrating(true);
+  };
 
   const fetchItems = useCallback(async () => {
     try {
@@ -222,6 +243,7 @@ export default function Home() {
         onDeleted={handleItemDeleted}
         linkedQuotesCount={linkedQuotesCount}
         onShowToast={showToast}
+        onCelebrate={handleCelebrate}
       />
 
       <Toast
@@ -229,6 +251,43 @@ export default function Home() {
         isVisible={toast.visible}
         onHide={() => setToast((t) => ({ ...t, visible: false }))}
       />
+
+      {celebrating && (
+        <>
+          <Confetti
+            onDone={() => {
+              setCelebrating(false);
+              fetchItems();
+            }}
+          />
+          <div
+            className="fixed left-1/2 animate-celebrate-toast pointer-events-none"
+            style={{
+              top: "35%",
+              zIndex: 210,
+              transform: "translate(-50%, 0)",
+              background: "rgba(0,0,0,0.7)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              borderRadius: 12,
+              padding: "16px 24px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#fff",
+                textShadow: "0 1px 8px rgba(0,0,0,0.6)",
+              }}
+            >
+              {celebrationMessage}
+            </span>
+          </div>
+        </>
+      )}
     </main>
   );
 }

@@ -91,6 +91,17 @@ body {
   animation: shimmer 1.5s infinite;
 }
 
+@keyframes celebrate-toast {
+  0%   { opacity: 0; transform: translate(-50%, 12px); }
+  12%  { opacity: 1; transform: translate(-50%, 0); }
+  80%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+
+.animate-celebrate-toast {
+  animation: celebrate-toast 3s ease forwards;
+}
+
 /* Checkbox */
 input[type="checkbox"] {
   accent-color: #c4b5a0;

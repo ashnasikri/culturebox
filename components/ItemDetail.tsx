@@ -31,6 +31,7 @@ interface ItemDetailProps {
   onDeleted: (id: string) => void;
   linkedQuotesCount: number;
   onShowToast: (msg: string) => void;
+  onCelebrate?: () => void;
 }
 
 export default function ItemDetail({
@@ -42,6 +43,7 @@ export default function ItemDetail({
   onDeleted,
   linkedQuotesCount,
   onShowToast,
+  onCelebrate,
 }: ItemDetailProps) {
   const [status, setStatus] = useState("");
   const [finishedMonth, setFinishedMonth] = useState(MONTHS[new Date().getMonth()]);
@@ -135,6 +137,9 @@ export default function ItemDetail({
     (showProgress && progress !== (item.progress ?? 0));
 
   const handleSave = async () => {
+    const isCelebration =
+      item.type === "book" && item.status === "reading" && status === "read";
+
     setIsSaving(true);
     try {
       const patch: Record<string, unknown> = {
@@ -151,8 +156,14 @@ export default function ItemDetail({
       if (!res.ok) throw new Error("Save failed");
       const data = await res.json();
       onUpdated(data.item);
-      setJustSaved(true);
-      setTimeout(() => setJustSaved(false), 1800);
+
+      if (isCelebration) {
+        onClose();
+        onCelebrate?.();
+      } else {
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 1800);
+      }
     } catch (err) {
       console.error("Save error:", err);
     } finally {
