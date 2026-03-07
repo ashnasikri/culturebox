@@ -20,8 +20,9 @@ function sortItems(items: Record<string, unknown>[]): Record<string, unknown>[] 
     // Items with positions come first, sorted by position
     if (posA !== null && posB !== null) {
       if (posA !== posB) return posA - posB;
-      // Tiebreaker: created_at asc
-      return new Date(a.created_at as string).getTime() - new Date(b.created_at as string).getTime();
+      // Stable tiebreaker: created_at asc, then id
+      const td = new Date(a.created_at as string).getTime() - new Date(b.created_at as string).getTime();
+      return td !== 0 ? td : (a.id as string).localeCompare(b.id as string);
     }
     if (posA !== null) return -1;
     if (posB !== null) return 1;
@@ -31,20 +32,19 @@ function sortItems(items: Record<string, unknown>[]): Record<string, unknown>[] 
     const pb = statusPriority(b.status as string);
     if (pa !== pb) return pa - pb;
 
-    // Finished group: sort by finish date desc
+    // Finished group: sort by finish date desc, then id (stable)
     if (pa === 1) {
       const yearDiff = ((b.finished_year as number) ?? 0) - ((a.finished_year as number) ?? 0);
       if (yearDiff !== 0) return yearDiff;
       const mA = MONTH_NUM[(a.finished_month as string) ?? ""] ?? 0;
       const mB = MONTH_NUM[(b.finished_month as string) ?? ""] ?? 0;
-      return mB - mA;
+      if (mB !== mA) return mB - mA;
+      return (a.id as string).localeCompare(b.id as string);
     }
 
-    // Reading + want_to: created_at desc
-    return (
-      new Date(b.created_at as string).getTime() -
-      new Date(a.created_at as string).getTime()
-    );
+    // Reading + want_to: created_at desc, then id (stable)
+    const td = new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime();
+    return td !== 0 ? td : (b.id as string).localeCompare(a.id as string);
   });
 }
 
