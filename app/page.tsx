@@ -213,6 +213,7 @@ export default function Home() {
             isLoading={isLoadingItems}
             onItemTap={setDetailItem}
             onReorder={(o) => handleReorder("book", o)}
+            itemType="book"
           />
         )}
         {activeTab === "quotes" && (
