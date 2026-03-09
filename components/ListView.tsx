@@ -274,10 +274,16 @@ function BooksTimelineView({
   const [readingItems, setReadingItems] = React.useState<Item[]>(defaultReadingOrder);
 
   // Sync if items prop changes (e.g. after add/remove)
-  const prevItemsRef = React.useRef(items);
+  // Only resync when the set of reading item IDs changes (add/remove), not on reorder
+  const prevReadingIdsRef = React.useRef<string>("");
   React.useEffect(() => {
-    if (prevItemsRef.current !== items) {
-      prevItemsRef.current = items;
+    const currentIds = items
+      .filter((i) => i.status === "reading")
+      .map((i) => i.id)
+      .sort()
+      .join(",");
+    if (prevReadingIdsRef.current !== currentIds) {
+      prevReadingIdsRef.current = currentIds;
       setReadingItems(
         [...items.filter((i) => i.status === "reading")].sort(
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
