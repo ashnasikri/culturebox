@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Item } from "@/types";
 import {
   DndContext,
@@ -37,20 +38,35 @@ const MONTH_ORDER: Record<string, number> = {
 function BookSectionHeader({
   type,
   label,
+  onReset,
 }: {
   type: "reading" | "month" | "want_to" | "earlier";
   label?: string;
+  onReset?: () => void;
 }) {
   if (type === "reading") {
     return (
-      <div className="flex items-center gap-2">
-        <span>📖</span>
-        <span
-          className="font-body uppercase tracking-[0.06em]"
-          style={{ color: "#c4b5a0", fontSize: 11, fontWeight: 500 }}
-        >
-          Currently Reading
-        </span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span>📖</span>
+          <span
+            className="font-body uppercase tracking-[0.06em]"
+            style={{ color: "#c4b5a0", fontSize: 11, fontWeight: 500 }}
+          >
+            Currently Reading
+          </span>
+        </div>
+        {onReset && (
+          <button
+            onClick={onReset}
+            className="font-body text-[11px] transition-colors"
+            style={{ color: "rgba(255,255,255,0.2)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.45)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.2)")}
+          >
+            reset order
+          </button>
+        )}
       </div>
     );
   }
@@ -79,6 +95,89 @@ function BookSectionHeader({
         {label ?? "Earlier"}
       </span>
       <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+    </div>
+  );
+}
+
+function SortableBookReadingRow({
+  item,
+  isLast,
+  onTap,
+}: {
+  item: Item;
+  isLast: boolean;
+  onTap: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.35 : 1,
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      className={`flex items-center ${!isLast ? "border-b border-white/[0.05]" : ""}`}
+    >
+      <div
+        {...listeners}
+        {...attributes}
+        className="pl-4 py-4 cursor-grab active:cursor-grabbing select-none text-vault-muted/25 hover:text-vault-muted/60 transition-colors shrink-0"
+        style={{ touchAction: "none" }}
+      >
+        <GripLines />
+      </div>
+      <button
+        onClick={onTap}
+        className="flex items-center gap-4 py-3.5 px-4 text-left flex-1 min-w-0 transition-colors hover:bg-white/[0.02] active:bg-white/[0.04]"
+      >
+        <div className="flex-1 min-w-0">
+          <p
+            className="font-body font-semibold text-[14px] leading-snug truncate"
+            style={{ color: "rgba(255,255,255,0.87)" }}
+          >
+            {item.title}
+          </p>
+          <p className="font-body text-[12px] mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+            {item.creator}
+          </p>
+          <div className="flex items-center gap-2 mt-2">
+            <div
+              className="rounded-full overflow-hidden"
+              style={{ width: 80, height: 3, background: "rgba(255,255,255,0.1)" }}
+            >
+              <div
+                className="h-full rounded-full bg-vault-warm"
+                style={{ width: `${item.progress ?? 0}%` }}
+              />
+            </div>
+            <span className="font-body text-[11px]" style={{ color: "rgba(196,181,160,0.8)" }}>
+              {item.progress ?? 0}%
+            </span>
+          </div>
+        </div>
+        <div
+          className="rounded overflow-hidden shrink-0"
+          style={{
+            width: 44,
+            height: 66,
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+          }}
+        >
+          {item.cover_image_url ? (
+            <img src={item.cover_image_url} alt={item.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-vault-muted text-xs">
+              📖
+            </div>
+          )}
+        </div>
+      </button>
     </div>
   );
 }
@@ -162,13 +261,56 @@ function BookTimelineRow({
 function BooksTimelineView({
   items,
   onItemTap,
+  onReorder,
 }: {
   items: Item[];
   onItemTap?: (item: Item) => void;
+  onReorder?: (newOrder: Item[]) => void;
 }) {
-  const readingItems = [...items.filter((i) => i.status === "reading")].sort(
+  const defaultReadingOrder = [...items.filter((i) => i.status === "reading")].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
+
+  const [readingItems, setReadingItems] = React.useState<Item[]>(defaultReadingOrder);
+
+  // Sync if items prop changes (e.g. after add/remove)
+  const prevItemsRef = React.useRef(items);
+  React.useEffect(() => {
+    if (prevItemsRef.current !== items) {
+      prevItemsRef.current = items;
+      setReadingItems(
+        [...items.filter((i) => i.status === "reading")].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+      );
+    }
+  }, [items]);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 500, tolerance: 5 } })
+  );
+
+  function handleReadingDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = readingItems.findIndex((i) => i.id === active.id);
+    const newIdx = readingItems.findIndex((i) => i.id === over.id);
+    const newReading = arrayMove(readingItems, oldIdx, newIdx);
+    setReadingItems(newReading);
+    // Rebuild full items array preserving non-reading items, with new reading order at top
+    const nonReading = items.filter((i) => i.status !== "reading");
+    onReorder?.([...newReading, ...nonReading]);
+  }
+
+  function handleResetOrder() {
+    const reset = [...items.filter((i) => i.status === "reading")].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    setReadingItems(reset);
+    const nonReading = items.filter((i) => i.status !== "reading");
+    onReorder?.([...reset, ...nonReading]);
+  }
 
   const wantToItems = [...items.filter((i) => i.status === "want_to")].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -200,69 +342,77 @@ function BooksTimelineView({
   }
   earlierItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  function SectionCard({ sectionItems, isWantTo }: { sectionItems: Item[]; isWantTo?: boolean }) {
-    if (isWantTo) {
-      return (
-        <div className="mt-3">
-          {sectionItems.map((item, idx) => (
-            <BookTimelineRow
-              key={item.id}
-              item={item}
-              isLast={idx === sectionItems.length - 1}
-              onTap={() => onItemTap?.(item)}
-              isWantTo
-            />
-          ))}
-        </div>
-      );
-    }
-    return (
-      <div
-        className="mt-3 rounded-xl overflow-hidden"
-        style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.03)" }}
-      >
-        {sectionItems.map((item, idx) => (
-          <BookTimelineRow
-            key={item.id}
-            item={item}
-            isLast={idx === sectionItems.length - 1}
-            onTap={() => onItemTap?.(item)}
-          />
-        ))}
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col px-4 pb-24 gap-5">
       {readingItems.length > 0 && (
         <div>
-          <BookSectionHeader type="reading" />
-          <SectionCard sectionItems={readingItems} />
+          <BookSectionHeader
+            type="reading"
+            onReset={readingItems.length > 1 ? handleResetOrder : undefined}
+          />
+          <div className="mt-3">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReadingDragEnd}>
+              <SortableContext items={readingItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                {readingItems.map((item, idx) => (
+                  <SortableBookReadingRow
+                    key={item.id}
+                    item={item}
+                    isLast={idx === readingItems.length - 1}
+                    onTap={() => onItemTap?.(item)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
         </div>
       )}
 
       {monthGroups.map((g) => (
         <div key={`${g.year}-${g.month}`}>
-          <BookSectionHeader
-            type="month"
-            label={`${g.month.toUpperCase()} ${g.year}`}
-          />
-          <SectionCard sectionItems={g.items} />
+          <BookSectionHeader type="month" label={`${g.month.toUpperCase()} ${g.year}`} />
+          <div className="mt-3">
+            {g.items.map((item, idx) => (
+              <BookTimelineRow
+                key={item.id}
+                item={item}
+                isLast={idx === g.items.length - 1}
+                onTap={() => onItemTap?.(item)}
+              />
+            ))}
+          </div>
         </div>
       ))}
 
       {earlierItems.length > 0 && (
         <div>
           <BookSectionHeader type="earlier" />
-          <SectionCard sectionItems={earlierItems} />
+          <div className="mt-3">
+            {earlierItems.map((item, idx) => (
+              <BookTimelineRow
+                key={item.id}
+                item={item}
+                isLast={idx === earlierItems.length - 1}
+                onTap={() => onItemTap?.(item)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
       {wantToItems.length > 0 && (
         <div>
           <BookSectionHeader type="want_to" />
-          <SectionCard sectionItems={wantToItems} isWantTo />
+          <div className="mt-3">
+            {wantToItems.map((item, idx) => (
+              <BookTimelineRow
+                key={item.id}
+                item={item}
+                isLast={idx === wantToItems.length - 1}
+                onTap={() => onItemTap?.(item)}
+                isWantTo
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -413,7 +563,7 @@ export default function ListView({ items, isLoading, onItemTap, onReorder, itemT
 
   // Books get the timeline view
   if (itemType === "book") {
-    return <BooksTimelineView items={items} onItemTap={onItemTap} />;
+    return <BooksTimelineView items={items} onItemTap={onItemTap} onReorder={onReorder} />;
   }
 
   function handleDragEnd(event: DragEndEvent) {
