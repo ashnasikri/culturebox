@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Item, Note } from "@/types";
+import { Item, Note, Quote } from "@/types";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -30,6 +30,7 @@ interface ItemDetailProps {
   onCoverUpdated: (id: string, newUrl: string) => void;
   onDeleted: (id: string) => void;
   linkedQuotesCount: number;
+  linkedQuotes: Quote[];
   onShowToast: (msg: string) => void;
   onCelebrate?: () => void;
 }
@@ -42,6 +43,7 @@ export default function ItemDetail({
   onCoverUpdated,
   onDeleted,
   linkedQuotesCount,
+  linkedQuotes,
   onShowToast,
   onCelebrate,
 }: ItemDetailProps) {
@@ -508,6 +510,34 @@ export default function ItemDetail({
               >
                 {isSaving ? "Saving..." : justSaved ? "✓ Saved" : "Save Changes"}
               </button>
+
+              {/* ── Linked Quotes ── */}
+              {linkedQuotes.length > 0 && (
+                <div className="mb-8">
+                  <p className="text-[11px] text-vault-muted/60 font-body uppercase tracking-[0.06em] mb-3">
+                    Quotes
+                  </p>
+                  <div className="space-y-2">
+                    {linkedQuotes.map((quote) => (
+                      <div
+                        key={quote.id}
+                        className="px-4 py-3 rounded-xl"
+                        style={{
+                          background: "rgba(196,181,160,0.05)",
+                          border: "1px solid rgba(196,181,160,0.1)",
+                        }}
+                      >
+                        <p
+                          className="text-[13px] leading-[1.65] font-quote italic"
+                          style={{ color: "rgba(255,255,255,0.75)" }}
+                        >
+                          "{quote.text}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ── Journal Notes ── */}
               <div className="mb-8">
