@@ -71,11 +71,30 @@ export default function ItemDetail({
       setFinishedMonth(item.finished_month ?? MONTHS[new Date().getMonth()]);
       setFinishedYear(item.finished_year ?? new Date().getFullYear());
       setCurrentPage(item.current_page ?? 0);
-      setTotalPages(item.total_pages ?? 0);
+      const knownPages = item.total_pages ?? 0;
+      setTotalPages(knownPages);
       setShowDeleteConfirm(false);
       setCascadeQuotes(false);
       setJustSaved(false);
       setNewNoteText("");
+
+      // Auto-fetch page count from Open Library if not already stored
+      if (item.type === "book" && !knownPages && item.openlibrary_id) {
+        const workId = item.openlibrary_id.replace(/^\/works\//, "");
+        fetch(`https://openlibrary.org/works/${workId}/editions.json?limit=20`)
+          .then((r) => r.json())
+          .then((d) => {
+            const pageCounts: number[] = (d.entries ?? [])
+              .map((e: Record<string, unknown>) => e.number_of_pages)
+              .filter((n: unknown): n is number => typeof n === "number" && n > 0);
+            if (pageCounts.length === 0) return;
+            pageCounts.sort((a, b) => a - b);
+            const median = pageCounts[Math.floor(pageCounts.length / 2)];
+            setTotalPages(median);
+          })
+          .catch(() => {/* silently ignore */});
+      }
+
       // Fetch notes for this item
       setIsLoadingNotes(true);
       fetch(`/api/notes?item_id=${item.id}`)
