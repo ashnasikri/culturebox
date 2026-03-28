@@ -115,11 +115,21 @@ export default function ItemDetail({
         .catch(console.error)
         .finally(() => setIsLoadingNotes(false));
 
-      // Fetch quotes linked to this item (by ID or title)
+      // Fetch quotes linked to this item (by ID or matching title)
       if (item.type === "book") {
-        fetch(`/api/quotes?source_item_id=${item.id}&source_title=${encodeURIComponent(item.title)}`)
+        fetch(`/api/quotes`)
           .then((r) => r.json())
-          .then((d) => setItemQuotes(d.quotes ?? []))
+          .then((d) => {
+            const all: Quote[] = d.quotes ?? [];
+            const titleLower = item.title.toLowerCase();
+            setItemQuotes(
+              all.filter(
+                (q) =>
+                  q.source_item_id === item.id ||
+                  (!q.source_item_id && q.source_title?.toLowerCase() === titleLower)
+              )
+            );
+          })
           .catch(console.error);
       }
     }
