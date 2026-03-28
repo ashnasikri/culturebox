@@ -48,7 +48,8 @@ export default function ItemDetail({
   const [status, setStatus] = useState("");
   const [finishedMonth, setFinishedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [finishedYear, setFinishedYear] = useState(new Date().getFullYear());
-  const [progress, setProgress] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
 
@@ -69,7 +70,8 @@ export default function ItemDetail({
       setStatus(item.status);
       setFinishedMonth(item.finished_month ?? MONTHS[new Date().getMonth()]);
       setFinishedYear(item.finished_year ?? new Date().getFullYear());
-      setProgress(item.progress ?? 0);
+      setCurrentPage(item.current_page ?? 0);
+      setTotalPages(item.total_pages ?? 0);
       setShowDeleteConfirm(false);
       setCascadeQuotes(false);
       setJustSaved(false);
@@ -129,12 +131,16 @@ export default function ItemDetail({
           { value: "want_to", label: "Want to Read" },
         ];
 
+  const computedProgress = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
+
   const hasChanges =
     status !== item.status ||
     (showFinished &&
       (finishedMonth !== item.finished_month ||
         finishedYear !== (item.finished_year ?? 0))) ||
-    (showProgress && progress !== (item.progress ?? 0));
+    (showProgress &&
+      (currentPage !== (item.current_page ?? 0) ||
+        totalPages !== (item.total_pages ?? 0)));
 
   const handleSave = async () => {
     const isCelebration =
@@ -144,7 +150,9 @@ export default function ItemDetail({
     try {
       const patch: Record<string, unknown> = {
         status,
-        progress: showProgress ? progress : null,
+        progress: showProgress ? computedProgress : null,
+        current_page: showProgress ? currentPage : null,
+        total_pages: showProgress ? totalPages : null,
         finished_month: showFinished ? finishedMonth : null,
         finished_year: showFinished ? finishedYear : null,
       };
@@ -411,18 +419,52 @@ export default function ItemDetail({
                     <p className="text-xs text-vault-muted font-body uppercase tracking-wider">
                       Progress
                     </p>
-                    <span className="text-sm font-body text-vault-warm font-medium">
-                      {progress}%
-                    </span>
+                    {totalPages > 0 && (
+                      <span className="text-sm font-body text-vault-warm font-medium">
+                        {computedProgress}%
+                      </span>
+                    )}
                   </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={progress}
-                    onChange={(e) => setProgress(parseInt(e.target.value))}
-                    className="w-full"
-                  />
+                  <div className="flex gap-3 mb-3">
+                    <div className="flex-1">
+                      <label className="text-[10px] text-vault-muted/60 font-body uppercase tracking-wider block mb-1">
+                        Current page
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={totalPages || undefined}
+                        value={currentPage || ""}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value) || 0;
+                          setCurrentPage(totalPages > 0 ? Math.min(v, totalPages) : v);
+                        }}
+                        className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.1] text-sm font-body text-vault-text focus:outline-none focus:border-vault-warm/40"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-vault-muted/60 font-body uppercase tracking-wider block mb-1">
+                        Total pages
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={totalPages || ""}
+                        placeholder="?"
+                        onChange={(e) => setTotalPages(parseInt(e.target.value) || 0)}
+                        className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.1] text-sm font-body text-vault-text focus:outline-none focus:border-vault-warm/40"
+                      />
+                    </div>
+                  </div>
+                  {totalPages > 0 && (
+                    <div className="w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-vault-warm/80 to-vault-warm transition-all duration-300"
+                        style={{ width: `${computedProgress}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

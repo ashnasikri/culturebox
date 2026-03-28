@@ -13,6 +13,8 @@ export interface Item {
   cover_image_url: string | null;
   status: ItemStatus;
   progress: number | null;
+  current_page: number | null;
+  total_pages: number | null;
   finished_month: string | null;
   finished_year: number | null;
   imdb_id: string | null;
@@ -75,6 +77,7 @@ export interface SearchResult {
   coverUrl: string | null;
   sourceId: string;
   type: ItemType;
+  total_pages?: number | null;
 }
 
 export type Tab = "movies" | "books" | "quotes";

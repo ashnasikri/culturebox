@@ -68,6 +68,7 @@ async function searchBooksNormalized(
         coverUrl,
         sourceId: doc.key as string,
         type: "book",
+        total_pages: (doc.number_of_pages_median as number) ?? null,
       };
     })
   );

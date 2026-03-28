@@ -64,7 +64,8 @@ export default function AddModal({
   const [status, setStatus] = useState("");
   const [finishedMonth, setFinishedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [finishedYear, setFinishedYear] = useState(new Date().getFullYear());
-  const [progress, setProgress] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +109,7 @@ export default function AddModal({
         setStep("choose");
         setSearchType("movie");
         setQuery(""); setResults([]); setSelected(null);
-        setStatus(""); setProgress(0); setCoverFile(null); setSearchError(false);
+        setStatus(""); setCurrentPage(0); setTotalPages(0); setCoverFile(null); setSearchError(false);
         setQuoteText(""); setSourceQuery(""); setVaultResults([]); setApiResults([]);
         setSelectedSource(null); setCustomTitle(""); setCustomCreator("");
         setShowCustomForm(false); setQuoteType("book");
@@ -182,6 +183,8 @@ export default function AddModal({
   const handleSelect = (result: SearchResult) => {
     setSelected(result);
     setStatus(result.type === "movie" ? "watched" : "read");
+    setTotalPages(result.total_pages ?? 0);
+    setCurrentPage(0);
     setStep("configure");
   };
 
@@ -210,7 +213,9 @@ export default function AddModal({
           year: selected.year,
           cover_image_url: coverImageUrl,
           status,
-          progress: status === "reading" ? progress : null,
+          progress: status === "reading" && totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : null,
+          current_page: status === "reading" ? currentPage : null,
+          total_pages: status === "reading" ? (totalPages || null) : null,
           finished_month: status === "watched" || status === "read" ? finishedMonth : null,
           finished_year: status === "watched" || status === "read" ? finishedYear : null,
           imdb_id: selected.type === "movie" ? selected.sourceId : null,
@@ -646,10 +651,52 @@ export default function AddModal({
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-2.5">
                     <Label>Progress</Label>
-                    <span className="text-sm font-body text-vault-warm font-medium">{progress}%</span>
+                    {totalPages > 0 && (
+                      <span className="text-sm font-body text-vault-warm font-medium">
+                        {Math.round((currentPage / totalPages) * 100)}%
+                      </span>
+                    )}
                   </div>
-                  <input type="range" min={0} max={100} value={progress}
-                    onChange={(e) => setProgress(parseInt(e.target.value))} className="w-full" />
+                  <div className="flex gap-3 mb-3">
+                    <div className="flex-1">
+                      <label className="text-[10px] text-vault-muted/60 font-body uppercase tracking-wider block mb-1">
+                        Current page
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={totalPages || undefined}
+                        value={currentPage || ""}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value) || 0;
+                          setCurrentPage(totalPages > 0 ? Math.min(v, totalPages) : v);
+                        }}
+                        className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.1] text-sm font-body text-vault-text focus:outline-none focus:border-vault-warm/40"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-vault-muted/60 font-body uppercase tracking-wider block mb-1">
+                        Total pages
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={totalPages || ""}
+                        placeholder="?"
+                        onChange={(e) => setTotalPages(parseInt(e.target.value) || 0)}
+                        className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.1] text-sm font-body text-vault-text focus:outline-none focus:border-vault-warm/40"
+                      />
+                    </div>
+                  </div>
+                  {totalPages > 0 && (
+                    <div className="w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-vault-warm/80 to-vault-warm transition-all duration-300"
+                        style={{ width: `${Math.round((currentPage / totalPages) * 100)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
