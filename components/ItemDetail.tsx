@@ -52,6 +52,7 @@ export default function ItemDetail({
   const [totalPages, setTotalPages] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const prevItemIdRef = useRef<string | null>(null);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cascadeQuotes, setCascadeQuotes] = useState(false);
@@ -67,19 +68,27 @@ export default function ItemDetail({
 
   useEffect(() => {
     if (item) {
+      const isNewItem = prevItemIdRef.current !== item.id;
+      prevItemIdRef.current = item.id;
+
       setStatus(item.status);
       setFinishedMonth(item.finished_month ?? MONTHS[new Date().getMonth()]);
       setFinishedYear(item.finished_year ?? new Date().getFullYear());
-      setCurrentPage(item.current_page ?? 0);
+
+      // Only reset page inputs when opening a different item, not after saves on the same item
+      if (isNewItem) {
+        setCurrentPage(item.current_page ?? 0);
+        setTotalPages(item.total_pages ?? 0);
+      }
+
       const knownPages = item.total_pages ?? 0;
-      setTotalPages(knownPages);
       setShowDeleteConfirm(false);
       setCascadeQuotes(false);
       setJustSaved(false);
       setNewNoteText("");
 
       // Auto-fetch page count from Open Library if not already stored
-      if (item.type === "book" && !knownPages && item.openlibrary_id) {
+      if (isNewItem && item.type === "book" && !knownPages && item.openlibrary_id) {
         const workId = item.openlibrary_id.replace(/^\/works\//, "");
         fetch(`https://openlibrary.org/works/${workId}/editions.json?limit=20`)
           .then((r) => r.json())
