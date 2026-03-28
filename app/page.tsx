@@ -169,7 +169,11 @@ export default function Home() {
   const bookItems = items.filter((i) => i.type === "book");
 
   const linkedQuotes = detailItem
-    ? quotes.filter((q) => q.source_item_id === detailItem.id)
+    ? quotes.filter((q) =>
+        q.source_item_id === detailItem.id ||
+        (!q.source_item_id &&
+          q.source_title?.toLowerCase() === detailItem.title.toLowerCase())
+      )
     : [];
   const linkedQuotesCount = linkedQuotes.length;
 
