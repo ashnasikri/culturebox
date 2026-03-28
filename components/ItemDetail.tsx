@@ -618,10 +618,10 @@ export default function ItemDetail({
               </div>
 
               {/* ── Linked Quotes ── */}
-              {itemQuotes.length > 0 && (
+              {item.type === "book" && (
                 <div className="mb-8">
                   <p className="text-[11px] text-vault-muted/60 font-body uppercase tracking-[0.06em] mb-3">
-                    Quotes
+                    Quotes ({itemQuotes.length})
                   </p>
                   <div className="space-y-2">
                     {itemQuotes.map((quote) => (
