@@ -126,7 +126,7 @@ export default function ItemDetail({
               all.filter(
                 (q) =>
                   q.source_item_id === item.id ||
-                  (!q.source_item_id && q.source_title?.toLowerCase() === titleLower)
+                  q.source_title?.toLowerCase() === titleLower
               )
             );
           })
