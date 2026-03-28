@@ -30,7 +30,6 @@ interface ItemDetailProps {
   onCoverUpdated: (id: string, newUrl: string) => void;
   onDeleted: (id: string) => void;
   linkedQuotesCount: number;
-  linkedQuotes: Quote[];
   onShowToast: (msg: string) => void;
   onCelebrate?: () => void;
 }
@@ -43,7 +42,6 @@ export default function ItemDetail({
   onCoverUpdated,
   onDeleted,
   linkedQuotesCount,
-  linkedQuotes,
   onShowToast,
   onCelebrate,
 }: ItemDetailProps) {
@@ -67,6 +65,9 @@ export default function ItemDetail({
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
+
+  // Linked quotes
+  const [itemQuotes, setItemQuotes] = useState<Quote[]>([]);
 
   useEffect(() => {
     if (item) {
@@ -113,6 +114,14 @@ export default function ItemDetail({
         .then((d) => setJournalNotes(d.notes ?? []))
         .catch(console.error)
         .finally(() => setIsLoadingNotes(false));
+
+      // Fetch quotes linked to this item (by ID or title)
+      if (item.type === "book") {
+        fetch(`/api/quotes?source_item_id=${item.id}&source_title=${encodeURIComponent(item.title)}`)
+          .then((r) => r.json())
+          .then((d) => setItemQuotes(d.quotes ?? []))
+          .catch(console.error);
+      }
     }
   }, [item]);
 
@@ -599,13 +608,13 @@ export default function ItemDetail({
               </div>
 
               {/* ── Linked Quotes ── */}
-              {linkedQuotes.length > 0 && (
+              {itemQuotes.length > 0 && (
                 <div className="mb-8">
                   <p className="text-[11px] text-vault-muted/60 font-body uppercase tracking-[0.06em] mb-3">
                     Quotes
                   </p>
                   <div className="space-y-2">
-                    {linkedQuotes.map((quote) => (
+                    {itemQuotes.map((quote) => (
                       <div
                         key={quote.id}
                         className="px-4 py-3 rounded-xl"

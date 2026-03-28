@@ -168,14 +168,9 @@ export default function Home() {
   const movieItems = items.filter((i) => i.type === "movie");
   const bookItems = items.filter((i) => i.type === "book");
 
-  const linkedQuotes = detailItem
-    ? quotes.filter((q) =>
-        q.source_item_id === detailItem.id ||
-        (!q.source_item_id &&
-          q.source_title?.toLowerCase() === detailItem.title.toLowerCase())
-      )
-    : [];
-  const linkedQuotesCount = linkedQuotes.length;
+  const linkedQuotesCount = detailItem
+    ? quotes.filter((q) => q.source_item_id === detailItem.id).length
+    : 0;
 
   const sharedGridProps = {
     isLoading: isLoadingItems,
@@ -248,7 +243,6 @@ export default function Home() {
         onCoverUpdated={handleCoverUpdate}
         onDeleted={handleItemDeleted}
         linkedQuotesCount={linkedQuotesCount}
-        linkedQuotes={linkedQuotes}
         onShowToast={showToast}
         onCelebrate={handleCelebrate}
       />
